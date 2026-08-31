@@ -1,0 +1,74 @@
+[
+  {
+    "name": "place-wood-tap",
+    "seconds": 1,
+    "prompt": "Single soft tap of a small wooden number tile being set onto a wooden board, warm and gentle, short decay",
+    "event": "playPlace"
+  },
+  {
+    "name": "place-stone-set",
+    "seconds": 1,
+    "prompt": "Small smooth stone tile gently placed onto a wooden tabletop, quiet rounded click with soft low thud",
+    "event": "playPlace"
+  },
+  {
+    "name": "place-peg-thunk",
+    "seconds": 1,
+    "prompt": "Short muted thunk of a wooden peg fitting snugly into a board hole, soft and satisfying",
+    "event": "playPlace"
+  },
+  {
+    "name": "place-glass-tick",
+    "seconds": 1,
+    "prompt": "Light delicate tick of a small glass token touching a wooden table surface, very short and clean",
+    "event": "playPlace"
+  },
+  {
+    "name": "invalid-wood-knock",
+    "seconds": 1,
+    "prompt": "Dull low knock on a hollow wooden box, soft rejection sound, muffled and short",
+    "event": "playInvalid"
+  },
+  {
+    "name": "invalid-dull-thud",
+    "seconds": 1,
+    "prompt": "Soft dull thud of a felt-covered mallet tapping wood, low and gentle, brief decay",
+    "event": "playInvalid"
+  },
+  {
+    "name": "invalid-rubber-bounce",
+    "seconds": 1,
+    "prompt": "Small soft rubber ball bouncing once on a wooden surface, muted low boing, very short",
+    "event": "playInvalid"
+  },
+  {
+    "name": "invalid-dice-rattle",
+    "seconds": 1,
+    "prompt": "Very brief rattle of two dice shaken once in a wooden cup, soft and restrained",
+    "event": "playInvalid"
+  },
+  {
+    "name": "select-switch-tick",
+    "seconds": 1,
+    "prompt": "Crisp short tick of a small metal switch being flipped, bright and precise",
+    "event": "playSelect"
+  },
+  {
+    "name": "select-pen-click",
+    "seconds": 1,
+    "prompt": "Clean mechanical click of a retractable pen button being pressed once, sharp and short",
+    "event": "playSelect"
+  },
+  {
+    "name": "select-brass-chime",
+    "seconds": 1,
+    "prompt": "Single soft strike of a tiny brass bell, gentle high chime with quick smooth decay",
+    "event": "playSelect"
+  },
+  {
+    "name": "select-cork-pop",
+    "seconds": 1,
+    "prompt": "Small gentle cork pop from a tiny bottle, soft rounded plosive, very short",
+    "event": "playSelect"
+  }
+]

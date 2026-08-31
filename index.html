@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Number Sanctuary</title>
+<link rel="stylesheet" href="./style.css" />
+<script src="./three.min.js"></script>
+<script type="module" src="./main.js"></script>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <h1 class="title">Number Sanctuary</h1>
+    <div class="modes" role="tablist" aria-label="Game modes">
+      <button data-mode="learn" class="mode-btn active">Learn</button>
+      <button data-mode="journey" class="mode-btn">Journey</button>
+      <button data-mode="daily" class="mode-btn">Daily</button>
+      <button data-mode="practice" class="mode-btn">Practice</button>
+      <button data-mode="challenge" class="mode-btn">Challenge</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <canvas id="scene-canvas"></canvas>
+    <section class="panel left-panel" aria-label="Status and progress">
+      <h2>Status</h2>
+      <p id="status-text">Ready.</p>
+      <div class="progress-wrap"><label for="progress-bar">Progress</label><div class="bar"><div id="progress-fill"></div></div></div>
+    </section>
+
+    <section class="panel right-panel" aria-label="Controls and info">
+      <h2>Controls &amp; Info</h2>
+      <ul class="info-list">
+        <li><span class="k">Click a cell, then a number (or type 1–9)</span></li>
+        <li><span class="k">N / U — note on/off · H — hint · C — clear</span></li>
+        <li><span class="k">R — restart · P — pause/resume · M — mute/unmute</span></li>
+      </ul>
+    </section>
+
+    <div id="overlay" class="overlay hidden"></div>
+  </main>
+</div>
+<script type="module" src="./audio.js"></script>
+</body>
+</html>
