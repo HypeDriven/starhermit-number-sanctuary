@@ -1,6 +1,6 @@
 'use strict';
 
-import * as THREE from 'three';
+const THREE = window.THREE;
 import { generateGrid, countSolutions, makePuzzle } from './rules.js';
 
 // ---------------------------------------------------------------------------
