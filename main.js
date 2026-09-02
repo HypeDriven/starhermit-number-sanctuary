@@ -323,7 +323,7 @@ function pickCell(px, py) {
     const inter = ray.ray.intersectSphere(new THREE.Sphere(cellMeshes[i].position, CELL_SIZE * 0.5), new THREE.Vector3());
     if (inter) { hitIdx = i; break; }
   }
-  if (hitIdx === -1) { selected = -1; updateCellVisual(selected); render(); return; }
+  if (hitIdx === -1) { selected = -1; selectedRing.visible = false; render(); return; }
 
   const cell = hitIdx, val = board[cell];
   // toggle note on empty cells with no value? notes only when digit present handled elsewhere
@@ -385,6 +385,7 @@ function restartRound() {
   buildPuzzle();
   notes.clear(); moves = 0; mistakes = 0; score = computeScore();
   selected = -1; gameOver = false; paused = false; startTime = Date.now();
+  for (let i = 0; i < SIZE * SIZE; i++) updateCellVisual(i);
   render(); updateStatus(); setProgress(computeProgress()); hideOverlay();
 }
 

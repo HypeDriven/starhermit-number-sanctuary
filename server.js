@@ -18,6 +18,9 @@ const FILES = {
   '/rules.js': 'rules.js',
   '/audio.js': 'audio.js',
   '/style.css': 'style.css',
+  '/three.min.js': 'three.min.js',
+  '/favicon.svg': 'favicon.svg',
+  '/icon.png': 'icon.png',
 };
 
 function contentType(p) {
@@ -27,6 +30,8 @@ function contentType(p) {
   if (p.endsWith('.json')) return 'application/json; charset=utf-8';
   if (p.endsWith('.txt')) return 'text/plain; charset=utf-8';
   if (p.endsWith('.opus')) return 'audio/ogg; codecs=opus';
+  if (p.endsWith('.svg')) return 'image/svg+xml';
+  if (p.endsWith('.png')) return 'image/png';
   return 'application/octet-stream';
 }
 
