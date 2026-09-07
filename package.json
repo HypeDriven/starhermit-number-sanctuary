@@ -3,13 +3,18 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
+  "private": true,
   "scripts": {
-    "test": "exit 0"
+    "test": "node tests/rules.mjs",
+    "test:e2e": "node tests/e2e.mjs"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "PolyForm-Noncommercial-1.0.0",
   "dependencies": {
     "three": "^0.185.1"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.62.1"
   }
 }

@@ -14,34 +14,57 @@
   <header class="topbar">
     <h1 class="title">Number Sanctuary</h1>
     <div class="modes" role="tablist" aria-label="Game modes">
-      <button data-mode="learn" class="mode-btn active">Learn</button>
-      <button data-mode="journey" class="mode-btn">Journey</button>
-      <button data-mode="daily" class="mode-btn">Daily</button>
-      <button data-mode="practice" class="mode-btn">Practice</button>
-      <button data-mode="challenge" class="mode-btn">Challenge</button>
+      <button data-mode="learn" class="mode-btn active" role="tab" aria-selected="true">Learn</button>
+      <button data-mode="journey" class="mode-btn" role="tab" aria-selected="false" tabindex="-1">Journey</button>
+      <button data-mode="daily" class="mode-btn" role="tab" aria-selected="false" tabindex="-1">Daily</button>
+      <button data-mode="practice" class="mode-btn" role="tab" aria-selected="false" tabindex="-1">Practice</button>
+      <button data-mode="challenge" class="mode-btn" role="tab" aria-selected="false" tabindex="-1">Challenge</button>
     </div>
   </header>
 
   <main class="stage">
-    <canvas id="scene-canvas"></canvas>
+    <canvas id="scene-canvas" aria-hidden="true"></canvas>
     <section class="panel left-panel" aria-label="Status and progress">
       <h2>Status</h2>
-      <p id="status-text">Ready.</p>
-      <div class="progress-wrap"><label for="progress-bar">Progress</label><div class="bar"><div id="progress-fill"></div></div></div>
+      <p id="status-text" aria-live="polite">Ready.</p>
+      <p id="cell-readout" class="readout" aria-live="polite">No cell selected.</p>
+      <div class="progress-wrap">
+        <span class="progress-label" id="progress-label">Progress</span>
+        <div class="bar" id="progress-bar" role="progressbar" aria-labelledby="progress-label"
+             aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-fill"></div></div>
+      </div>
     </section>
 
     <section class="panel right-panel" aria-label="Controls and info">
-      <h2>Controls &amp; Info</h2>
+      <h2>Controls</h2>
+      <div id="number-pad" class="pad" role="group" aria-label="Number pad">
+        <button type="button" class="pad-btn" data-digit="1">1</button>
+        <button type="button" class="pad-btn" data-digit="2">2</button>
+        <button type="button" class="pad-btn" data-digit="3">3</button>
+        <button type="button" class="pad-btn" data-digit="4">4</button>
+        <button type="button" class="pad-btn" data-digit="5">5</button>
+        <button type="button" class="pad-btn" data-digit="6">6</button>
+        <button type="button" class="pad-btn" data-digit="7">7</button>
+        <button type="button" class="pad-btn" data-digit="8">8</button>
+        <button type="button" class="pad-btn" data-digit="9">9</button>
+        <button type="button" class="pad-btn wide" data-action="erase" aria-label="Erase selected cell">Erase</button>
+      </div>
+      <div class="actions">
+        <button type="button" class="action-btn" data-action="note" aria-pressed="false">Mark (N)</button>
+        <button type="button" class="action-btn" data-action="hint">Hint (H)</button>
+        <button type="button" class="action-btn" data-action="clear">Clear (C)</button>
+        <button type="button" class="action-btn" data-action="restart">Restart (R)</button>
+        <button type="button" class="action-btn" data-action="pause">Pause (P)</button>
+        <button type="button" class="action-btn" data-action="mute" aria-pressed="false">Mute (M)</button>
+      </div>
       <ul class="info-list">
-        <li><span class="k">Click a cell, then a number (or type 1–9)</span></li>
-        <li><span class="k">N / U — note on/off · H — hint · C — clear</span></li>
-        <li><span class="k">R — restart · P — pause/resume · M — mute/unmute</span></li>
+        <li>Click a cell (or use the arrow keys), then a number.</li>
+        <li>Orange tiles are fixed clues; green tiles are yours.</li>
       </ul>
     </section>
 
-    <div id="overlay" class="overlay hidden"></div>
+    <div id="overlay" class="overlay hidden" role="status" aria-live="polite"></div>
   </main>
 </div>
-<script type="module" src="./audio.js"></script>
 </body>
 </html>

@@ -8,6 +8,21 @@ const BOX = 3;
 
 function boxIndex(r, c) { return Math.floor(r / BOX) * BOX + Math.floor(c / BOX); }
 
+function validPuzzle(puzzle) {
+  if (!Array.isArray(puzzle) || puzzle.length !== SIZE * SIZE) return false;
+  const rows = Array.from({ length: SIZE }, () => new Set());
+  const cols = Array.from({ length: SIZE }, () => new Set());
+  const boxes = Array.from({ length: SIZE }, () => new Set());
+  for (let i = 0; i < puzzle.length; i++) {
+    const v = puzzle[i], r = Math.floor(i / SIZE), c = i % SIZE, b = boxIndex(r, c);
+    if (!Number.isInteger(v) || v < 0 || v > SIZE) return false;
+    if (!v) continue;
+    if (rows[r].has(v) || cols[c].has(v) || boxes[b].has(v)) return false;
+    rows[r].add(v); cols[c].add(v); boxes[b].add(v);
+  }
+  return true;
+}
+
 /**
  * Generate a full valid Sudoku grid using a seeded PRNG (mulberry32).
  */
@@ -29,9 +44,6 @@ export function generateGrid(seed) {
       used[g[r * SIZE + i]] = true;
       used[g[i * SIZE + c]] = true;
     }
-    for (let i = 0; i < BOX; i++)
-      for (let j = 0; j < BOX; j++)
-        used[g[(b - Math.floor(b / BOX) * BOX + i) * SIZE + (Math.floor(b / BOX) * BOX + j)] ] !== undefined && null; // noop guard
     // box cells:
     const br = Math.floor(b / BOX), bc = b % BOX;
     for (let i = 0; i < BOX; i++)
@@ -40,8 +52,7 @@ export function generateGrid(seed) {
     // shuffle candidates for variety
     const cands = [];
     for (let d = 1; d <= SIZE; d++) if (!used[d]) cands.push(d);
-    const k = Math.floor(rnd() * cands.length);
-    for (let i = 0; i < cands.length - 1; i++) {
+    for (let i = cands.length - 1; i > 0; i--) {
       const j = Math.floor(rnd() * (i + 1));
       const tmp = cands[i]; cands[i] = cands[j]; cands[j] = tmp;
     }
@@ -60,12 +71,14 @@ export function generateGrid(seed) {
 /**
  * Count solutions up to `limit` using backtracking.
  */
-export function countSolutions(puzzle, limit) {
+export function countSolutions(puzzle, limit = 2) {
+  if (!validPuzzle(puzzle)) return 0;
   const g = puzzle.slice();
   let count = 0;
-  const usedRow = new Array(SIZE).fill(0).map(() => new Array(SIZE).fill(false));
-  const usedCol = new Array(SIZE).fill(0).map(() => new Array(SIZE).fill(false));
-  const usedBox = new Array(SIZE).fill(0).map(() => new Array(SIZE).fill(false));
+  // digit indices run 1..SIZE, so these need SIZE + 1 slots
+  const usedRow = new Array(SIZE).fill(0).map(() => new Array(SIZE + 1).fill(false));
+  const usedCol = new Array(SIZE).fill(0).map(() => new Array(SIZE + 1).fill(false));
+  const usedBox = new Array(SIZE).fill(0).map(() => new Array(SIZE + 1).fill(false));
   for (let r = 0; r < SIZE; r++)
     for (let c = 0; c < SIZE; c++) {
       const v = g[r * SIZE + c];
@@ -103,9 +116,10 @@ export function countSolutions(puzzle, limit) {
 }
 
 /**
- * Build a puzzle from `grid` by removing cells. Returns {puzzle, removed}.
+ * Build a puzzle from `grid` by removing up to `target` cells, keeping the
+ * puzzle uniquely solvable at every step. Returns {puzzle, removed}.
  */
-export function makePuzzle(grid, seed) {
+export function makePuzzle(grid, seed, target) {
   const p = grid.slice();
   let s = (seed ^ 0x9E3779B9) >>> 0;
   const rnd = () => {
@@ -120,9 +134,15 @@ export function makePuzzle(grid, seed) {
     const j = Math.floor(rnd() * (i + 1));
     const tmp = order[i]; order[i] = order[j]; order[j] = tmp;
   }
+  const want = Number.isInteger(target) ? target : SIZE * SIZE;
   let removed = 0;
   for (const pos of order) {
-    if (p[pos]) { p[pos] = 0; removed++; }
+    if (removed >= want) break;
+    if (!p[pos]) continue;
+    const kept = p[pos];
+    p[pos] = 0;
+    if (countSolutions(p, 2) === 1) removed++;
+    else p[pos] = kept;
   }
   return { puzzle: p, removed };
 }
@@ -131,40 +151,35 @@ export function makePuzzle(grid, seed) {
  * Solve `puzzle` via backtracking. Returns solution array or null.
  */
 export function solve(puzzle) {
+  if (!validPuzzle(puzzle)) return null;
   const g = puzzle.slice();
-  for (let start = 0; start <= SIZE * SIZE; start++) {
+
+  const fits = (pos, d) => {
+    const r = Math.floor(pos / SIZE), c = pos % SIZE, b = boxIndex(r, c);
+    for (let i = 0; i < SIZE; i++) {
+      if (g[r * SIZE + i] === d || g[i * SIZE + c] === d) return false;
+    }
+    const br = Math.floor(b / BOX), bc = b % BOX;
+    for (let i = 0; i < BOX; i++)
+      for (let j = 0; j < BOX; j++)
+        if (g[(br * BOX + i) * SIZE + bc * BOX + j] === d) return false;
+    return true;
+  };
+
+  const rec = (from) => {
     let pos = -1;
-    outer:
-    for (let i = start; i < SIZE * SIZE; i++) if (!g[i]) { pos = i; break; }
-    if (pos === -1) {
-      // check earlier empties only when start>0 handled by loop structure
-      let found = false;
-      for (let i = 0; i < start; i++) if (!g[i]) { found = true; break; }
-      if (!found) return g.slice();
-    } else {
-      const r = Math.floor(pos / SIZE), c = pos % SIZE, b = boxIndex(r, c);
-      for (let d = 1; d <= SIZE; d++) {
-        let ok = true;
-        for (let i = 0; i < SIZE; i++) { if (g[r * SIZE + i] === d) { ok = false; break; } if (g[i * SIZE + c] === d) { ok = false; break; } }
-        if (ok) {
-          const br = Math.floor(b / BOX), bc = b % BOX;
-          for (let i = 0; i < BOX && ok; i++)
-            for (let j = 0; j < BOX; j++)
-              if (g[(br * BOX + i) * SIZE + bc * BOX + j] === d) { ok = false; break; }
-        }
-        if (!ok) continue;
-        g[pos] = d;
-        let done = true;
-        for (let i = pos + 1; i < SIZE * SIZE; i++) if (!g[i]) { done = false; break; }
-        if (done) return g.slice();
-      }
+    for (let i = from; i < SIZE * SIZE; i++) if (!g[i]) { pos = i; break; }
+    if (pos === -1) return true;
+    for (let d = 1; d <= SIZE; d++) {
+      if (!fits(pos, d)) continue;
+      g[pos] = d;
+      if (rec(pos + 1)) return true;
       g[pos] = 0;
     }
-  }
-  // fallback: no solution found in loop
-  let anyEmpty = false;
-  for (let i = 0; i < SIZE * SIZE; i++) if (!g[i]) { anyEmpty = true; break; }
-  return anyEmpty ? null : g.slice();
+    return false;
+  };
+
+  return rec(0) ? g.slice() : null;
 }
 
 export const RULES_VERSION = 1;

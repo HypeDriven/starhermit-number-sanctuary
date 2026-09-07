@@ -13,6 +13,7 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : (parseInt(proce
 
 // --- static file table -----------------------------------------------------
 const FILES = {
+  '/': 'index.html',
   '/index.html': 'index.html',
   '/main.js': 'main.js',
   '/rules.js': 'rules.js',
@@ -21,6 +22,7 @@ const FILES = {
   '/three.min.js': 'three.min.js',
   '/favicon.svg': 'favicon.svg',
   '/icon.png': 'icon.png',
+  '/coverart.png': 'coverart.png',
 };
 
 function contentType(p) {
@@ -49,7 +51,7 @@ const server = http.createServer((req, res) => {
   const file = path.join(DIST_ROOT, sfx || FILES[p]);
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(500); res.end('error: ' + err.message); return; }
-    res.writeHead(200, { 'Content-Type': contentType(p), 'Cache-Control': 'no-cache' });
+    res.writeHead(200, { 'Content-Type': contentType(file), 'Cache-Control': 'no-cache' });
     res.end(data);
   });
 });

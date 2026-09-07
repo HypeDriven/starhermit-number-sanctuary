@@ -1,10 +1,10 @@
 # Number Sanctuary — Product and Game Specification
 
-**Document status:** design specification only; no implementation is included.  
-**Game index:** 34  
-**Genre:** Constraint puzzle  
-**Players:** 1 player; optional asynchronous score comparison  
-**Targets:** desktop browsers, mobile browsers, landscape and portrait where practical  
+**Document status:** Playable local implementation; hosted scoring and per-digit pencil notes remain unimplemented.
+**Game index:** 34
+**Genre:** Constraint puzzle
+**Players:** 1 player; optional asynchronous score comparison
+**Targets:** desktop browsers, mobile browsers, landscape and portrait where practical
 **Rendering direction:** Three.js-first presentation with a fully usable semantic HTML interface layer
 
 ## 1. Product vision
