@@ -12,32 +12,32 @@
 <body>
 <div id="app">
   <header class="topbar">
-    <h1 class="title">Number Sanctuary</h1>
-    <div class="modes" role="tablist" aria-label="Game modes">
-      <button data-mode="learn" class="mode-btn active" role="tab" aria-selected="true">Learn</button>
-      <button data-mode="journey" class="mode-btn" role="tab" aria-selected="false" tabindex="-1">Journey</button>
-      <button data-mode="daily" class="mode-btn" role="tab" aria-selected="false" tabindex="-1">Daily</button>
-      <button data-mode="practice" class="mode-btn" role="tab" aria-selected="false" tabindex="-1">Practice</button>
-      <button data-mode="challenge" class="mode-btn" role="tab" aria-selected="false" tabindex="-1">Challenge</button>
+    <h1 class="title" data-i18n="app.title">Number Sanctuary</h1>
+    <div class="modes" role="tablist" aria-label="Game modes" data-i18n-aria-label="aria.modes">
+      <button data-mode="learn" class="mode-btn active" role="tab" aria-selected="true" data-i18n="mode.learn">Learn</button>
+      <button data-mode="journey" class="mode-btn" role="tab" aria-selected="false" tabindex="-1" data-i18n="mode.journey">Journey</button>
+      <button data-mode="daily" class="mode-btn" role="tab" aria-selected="false" tabindex="-1" data-i18n="mode.daily">Daily</button>
+      <button data-mode="practice" class="mode-btn" role="tab" aria-selected="false" tabindex="-1" data-i18n="mode.practice">Practice</button>
+      <button data-mode="challenge" class="mode-btn" role="tab" aria-selected="false" tabindex="-1" data-i18n="mode.challenge">Challenge</button>
     </div>
   </header>
 
   <main class="stage">
     <canvas id="scene-canvas" aria-hidden="true"></canvas>
-    <section class="panel left-panel" aria-label="Status and progress">
-      <h2>Status</h2>
-      <p id="status-text" aria-live="polite">Ready.</p>
-      <p id="cell-readout" class="readout" aria-live="polite">No cell selected.</p>
+    <section class="panel left-panel" aria-label="Status and progress" data-i18n-aria-label="aria.statusPanel">
+      <h2 data-i18n="panel.status">Status</h2>
+      <p id="status-text" aria-live="polite" data-i18n="status.ready">Ready.</p>
+      <p id="cell-readout" class="readout" aria-live="polite" data-i18n="cell.none">No cell selected.</p>
       <div class="progress-wrap">
-        <span class="progress-label" id="progress-label">Progress</span>
+        <span class="progress-label" id="progress-label" data-i18n="panel.progress">Progress</span>
         <div class="bar" id="progress-bar" role="progressbar" aria-labelledby="progress-label"
              aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-fill"></div></div>
       </div>
     </section>
 
-    <section class="panel right-panel" aria-label="Controls and info">
-      <h2>Controls</h2>
-      <div id="number-pad" class="pad" role="group" aria-label="Number pad">
+    <section class="panel right-panel" aria-label="Controls and info" data-i18n-aria-label="aria.controlsPanel">
+      <h2 data-i18n="panel.controls">Controls</h2>
+      <div id="number-pad" class="pad" role="group" aria-label="Number pad" data-i18n-aria-label="aria.numberPad">
         <button type="button" class="pad-btn" data-digit="1">1</button>
         <button type="button" class="pad-btn" data-digit="2">2</button>
         <button type="button" class="pad-btn" data-digit="3">3</button>
@@ -47,19 +47,19 @@
         <button type="button" class="pad-btn" data-digit="7">7</button>
         <button type="button" class="pad-btn" data-digit="8">8</button>
         <button type="button" class="pad-btn" data-digit="9">9</button>
-        <button type="button" class="pad-btn wide" data-action="erase" aria-label="Erase selected cell">Erase</button>
+        <button type="button" class="pad-btn wide" data-action="erase" aria-label="Erase selected cell" data-i18n-aria-label="aria.erase" data-i18n="btn.erase">Erase</button>
       </div>
       <div class="actions">
-        <button type="button" class="action-btn" data-action="note" aria-pressed="false">Mark (N)</button>
-        <button type="button" class="action-btn" data-action="hint">Hint (H)</button>
-        <button type="button" class="action-btn" data-action="clear">Clear (C)</button>
-        <button type="button" class="action-btn" data-action="restart">Restart (R)</button>
-        <button type="button" class="action-btn" data-action="pause">Pause (P)</button>
-        <button type="button" class="action-btn" data-action="mute" aria-pressed="false">Mute (M)</button>
+        <button type="button" class="action-btn" data-action="note" aria-pressed="false" data-i18n="btn.mark">Mark (N)</button>
+        <button type="button" class="action-btn" data-action="hint" data-i18n="btn.hint">Hint (H)</button>
+        <button type="button" class="action-btn" data-action="clear" data-i18n="btn.clear">Clear (C)</button>
+        <button type="button" class="action-btn" data-action="restart" data-i18n="btn.restart">Restart (R)</button>
+        <button type="button" class="action-btn" data-action="pause" data-i18n="btn.pause">Pause (P)</button>
+        <button type="button" class="action-btn" data-action="mute" aria-pressed="false" data-i18n="btn.mute">Mute (M)</button>
       </div>
       <ul class="info-list">
-        <li>Click a cell (or use the arrow keys), then a number.</li>
-        <li>Orange tiles are fixed clues; green tiles are yours.</li>
+        <li data-i18n="info.select">Click a cell (or use the arrow keys), then a number.</li>
+        <li data-i18n="info.colors">Orange tiles are fixed clues; green tiles are yours.</li>
       </ul>
     </section>
 

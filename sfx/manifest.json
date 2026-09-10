@@ -70,5 +70,47 @@
     "seconds": 1,
     "prompt": "Small gentle cork pop from a tiny bottle, soft rounded plosive, very short",
     "event": "playSelect"
+  },
+  {
+    "name": "solve-bloom-chime",
+    "seconds": 2,
+    "prompt": "Slow blooming shimmer of three small temple bells struck together and ringing out over a stone courtyard, warm, resolved, gently fading",
+    "event": "playSolve"
+  },
+  {
+    "name": "solve-bowl-swell",
+    "seconds": 2,
+    "prompt": "Single large singing bowl struck softly and allowed to swell and decay, calm and complete, no reverb tail cutoff",
+    "event": "playSolve"
+  },
+  {
+    "name": "hint-glass-shimmer",
+    "seconds": 1,
+    "prompt": "Soft airy shimmer of a fingertip circling the rim of a glass, brief rising sparkle, gentle and helpful",
+    "event": "playHint"
+  },
+  {
+    "name": "erase-brush-sweep",
+    "seconds": 1,
+    "prompt": "Short soft sweep of a dry brush wiping chalk dust from a slate surface, quiet and papery",
+    "event": "playErase"
+  },
+  {
+    "name": "pause-stone-close",
+    "seconds": 1,
+    "prompt": "Low soft stone slab settling closed, muffled hush, brief and calming",
+    "event": "playPause"
+  },
+  {
+    "name": "resume-stone-open",
+    "seconds": 1,
+    "prompt": "Low soft stone slab sliding open with a gentle airy release, brief and calming",
+    "event": "playResume"
+  },
+  {
+    "name": "mode-cloth-turn",
+    "seconds": 1,
+    "prompt": "Single soft turn of a heavy linen page over wood, quiet papery whoosh, very short",
+    "event": "playMode"
   }
 ]

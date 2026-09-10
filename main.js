@@ -3,6 +3,7 @@
 const THREE = window.THREE;
 import { generateGrid, makePuzzle } from './rules.js';
 import * as audio from './audio.js';
+import { t, getLocale } from './i18n.js';
 
 // ---------------------------------------------------------------------------
 // Constants and static data
@@ -307,12 +308,14 @@ function initThree() {
   dir.position.set(4, 8, 6);
   scene.add(dir);
 
-  // board plane (stone courtyard base)
+  // board plane (stone courtyard base). The authored limestone scan multiplies
+  // into the base colour; if it fails to load the flat colour is what remains.
   const boardGeom = new THREE.PlaneGeometry(SIZE * CELL_SIZE + GAP * SIZE, SIZE * CELL_SIZE + GAP * SIZE);
-  const boardMat = new THREE.MeshStandardMaterial({ color: 0x3a4750 });
+  const boardMat = new THREE.MeshStandardMaterial({ color: 0x3a4750, roughness: 0.95 });
   const boardMesh = new THREE.Mesh(boardGeom, boardMat);
   boardMesh.rotation.x = -Math.PI / 2;
   scene.add(boardMesh);
+  loadTextures(boardMat);
 
   // cell tiles (inset number tiles)
   const tileGeom = new THREE.BoxGeometry(CELL_SIZE * 0.94, CELL_SIZE * 0.5, CELL_SIZE * 0.94);
@@ -337,6 +340,27 @@ function initThree() {
   scene.add(selectedRing);
 
   resize();
+}
+
+// Optional authored art. Every load is best-effort: a failure leaves the
+// procedural look untouched and never blocks play.
+function loadTextures(boardMat) {
+  let loader;
+  try { loader = new THREE.TextureLoader(); } catch (e) { return; }
+  loader.load('./assets/courtyard-stone.webp', (tex) => {
+    if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(3, 3);
+    tex.anisotropy = 4;
+    boardMat.map = tex;
+    boardMat.needsUpdate = true;
+    render();
+  }, undefined, () => { /* keep the flat stone colour */ });
+  loader.load('./assets/sanctuary-backdrop.webp', (tex) => {
+    if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    scene.background = tex;
+    render();
+  }, undefined, () => { /* keep the transparent/clear backdrop */ });
 }
 
 function makeTextSprite(text) {
@@ -400,21 +424,41 @@ const actionBtns = Array.from(document.querySelectorAll('.action-btn'));
 const noteBtn = document.querySelector('.action-btn[data-action="note"]');
 const cellReadoutEl = document.getElementById('cell-readout');
 
+// Apply the active locale to every statically authored string in index.html.
+// Elements carry data-i18n (text) and/or data-i18n-aria-label.
+function applyStaticStrings() {
+  document.documentElement.lang = getLocale();
+  document.title = t('app.title');
+  for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll('[data-i18n-aria-label]')) {
+    el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
+  }
+}
+
 function fmtTime(sec) {
   const m = Math.floor(sec / 60), s = sec % 60;
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
 function updateStatus() {
-  const diffLabel = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
-  const bestTxt = best[difficulty] != null ? ` · Best ${best[difficulty]}` : '';
-  statusTextEl.textContent =
-    `${diffLabel} · ${filledCount()}/${SIZE * SIZE} · Score ${computeScore()} · Mistakes ${mistakes} · ${fmtTime(elapsedSeconds())}${bestTxt}`;
+  const bestTxt = best[difficulty] != null ? t('status.best', { best: best[difficulty] }) : '';
+  statusTextEl.textContent = t('status.line', {
+    difficulty: t('diff.' + difficulty),
+    filled: filledCount(),
+    score: computeScore(),
+    mistakes,
+    time: fmtTime(elapsedSeconds()),
+  }) + bestTxt;
   if (cellReadoutEl) {
+    let value;
+    if (board[selected]) {
+      value = given[selected] ? t('cell.fixed', { digit: board[selected] }) : String(board[selected]);
+    } else {
+      value = notes.has(selected) ? t('cell.marked') : t('cell.empty');
+    }
     cellReadoutEl.textContent = selected === -1
-      ? 'No cell selected.'
-      : `Cell row ${Math.floor(selected / SIZE) + 1}, column ${selected % SIZE + 1}: ` +
-        (board[selected] ? `${board[selected]}${given[selected] ? ' (fixed)' : ''}` : notes.has(selected) ? 'marked, empty' : 'empty');
+      ? t('cell.none')
+      : t('cell.at', { row: Math.floor(selected / SIZE) + 1, col: (selected % SIZE) + 1, value });
   }
 }
 
@@ -481,8 +525,10 @@ function enterDigit(d) {
 
 function eraseCell() {
   if (paused || gameOver || selected === -1 || given[selected]) return;
+  const had = !!board[selected] || notes.has(selected);
   if (board[selected]) { board[selected] = 0; moves = Math.max(0, moves - 1); }
   notes.delete(selected);
+  if (had) audio.playErase();
   updateCellVisual(selected);
   refresh();
 }
@@ -507,19 +553,19 @@ function finishRound() {
   gameOver = true;
   const p = scoreParts();
   if (best[difficulty] == null || p.total > best[difficulty]) best[difficulty] = p.total;
-  audio.playPlace();
+  audio.playSolve();
   for (let i = 0; i < SIZE * SIZE; i++) updateCellVisual(i);
   selected = -1;
   showOverlay(
-    `<h2>Sanctuary complete</h2>` +
+    `<h2>${t('overlay.complete')}</h2>` +
     `<ul class="score-list">` +
-    `<li>Digits placed <span>${p.placed}</span></li>` +
-    `<li>Mistakes (${mistakes}) <span>${p.mistakePenalty}</span></li>` +
-    `<li>Hints (${hints}) <span>${p.hintPenalty}</span></li>` +
-    `<li>Solve bonus <span>${p.solveBonus}</span></li>` +
-    `<li>Time bonus (${fmtTime(elapsedSeconds())}) <span>${p.timeBonus}</span></li>` +
-    `<li class="total">Total <span>${p.total}</span></li>` +
-    `</ul><p class="hint-line">Press R for a new round.</p>`,
+    `<li>${t('score.placed')} <span>${p.placed}</span></li>` +
+    `<li>${t('score.mistakes', { n: mistakes })} <span>${p.mistakePenalty}</span></li>` +
+    `<li>${t('score.hints', { n: hints })} <span>${p.hintPenalty}</span></li>` +
+    `<li>${t('score.solve')} <span>${p.solveBonus}</span></li>` +
+    `<li>${t('score.time', { time: fmtTime(elapsedSeconds()) })} <span>${p.timeBonus}</span></li>` +
+    `<li class="total">${t('score.total')} <span>${p.total}</span></li>` +
+    `</ul><p class="hint-line">${t('overlay.again')}</p>`,
     'results');
   refresh();
 }
@@ -535,7 +581,7 @@ function showHint() {
   hints++;
   applyDigit(target, grid[target]);
   selected = target;
-  audio.playPlace();
+  audio.playHint();
   updateCellVisual(target);
   if (isSolved()) finishRound();
   else refresh();
@@ -579,12 +625,14 @@ function setPaused(next) {
   if (next) {
     paused = true;
     pausedAt = Date.now();
-    showOverlay('<h2>Paused</h2><p class="hint-line">Press P or click Resume to continue.</p>' +
-      '<button type="button" id="resume-btn" class="action-btn">Resume</button>', 'paused');
+    audio.playPause();
+    showOverlay(`<h2>${t('overlay.paused')}</h2><p class="hint-line">${t('overlay.pausedHint')}</p>` +
+      `<button type="button" id="resume-btn" class="action-btn">${t('btn.resume')}</button>`, 'paused');
     const rb = document.getElementById('resume-btn');
     if (rb) rb.addEventListener('click', () => setPaused(false));
   } else {
     resumeIfPaused();
+    audio.playResume();
     hideOverlay();
   }
   refresh();
@@ -598,7 +646,7 @@ function setMuted(next) {
   const btn = document.querySelector('.action-btn[data-action="mute"]');
   if (btn) {
     btn.setAttribute('aria-pressed', String(muted));
-    btn.textContent = muted ? 'Unmute (M)' : 'Mute (M)';
+    btn.textContent = muted ? t('btn.unmute') : t('btn.mute');
   }
 }
 
@@ -711,6 +759,7 @@ function setActiveMode(m) {
 modeBtns.forEach((btn) => {
   btn.addEventListener('click', () => {
     setActiveMode(btn.dataset.mode);
+    audio.playMode();
     restartRound();
   });
 });
@@ -727,6 +776,7 @@ if (!savedRound || !restoreRound(savedRound)) {
 } else {
   setActiveMode(mode);
 }
+applyStaticStrings();
 initThree();
 setMuted(muted);
 if (gameOver) finishRound();
@@ -752,6 +802,7 @@ export const Game = {
       notes: Array.from(notes), selected, mode, difficulty,
       moves, mistakes, hints, paused, muted, gameOver,
       score: computeScore(), progress: computeProgress(), seed: puzzleSeed,
+      locale: getLocale(),
     };
   },
   // project a cell centre to page coordinates (used by the automated QA pass)

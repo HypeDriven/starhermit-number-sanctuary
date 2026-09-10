@@ -54,6 +54,12 @@ const EVENT_SAMPLES = {
   playPlace: ['place-wood-tap', 'place-stone-set', 'place-peg-thunk', 'place-glass-tick'],
   playInvalid: ['invalid-wood-knock', 'invalid-dull-thud', 'invalid-rubber-bounce', 'invalid-dice-rattle'],
   playSelect: ['select-switch-tick', 'select-pen-click', 'select-brass-chime', 'select-cork-pop'],
+  playSolve: ['solve-bloom-chime', 'solve-bowl-swell'],
+  playHint: ['hint-glass-shimmer'],
+  playErase: ['erase-brush-sweep'],
+  playPause: ['pause-stone-close'],
+  playResume: ['resume-stone-open'],
+  playMode: ['mode-cloth-turn'],
 };
 
 const _clips = new Map();   // name -> { status: 'loading'|'ready'|'failed', buffer }
@@ -116,3 +122,15 @@ function beep(freq, durSec) {
 export function playPlace() { if (!tryPlaySample('playPlace')) beep(440, 0.12); }
 export function playInvalid() { if (!tryPlaySample('playInvalid')) beep(180, 0.18); }
 export function playSelect() { if (!tryPlaySample('playSelect')) beep(660, 0.08); }
+
+// Cues added with the sanctuary audio pass. Each keeps a synth fallback so the
+// event is always audible even before (or without) its sample.
+export function playSolve() {
+  if (tryPlaySample('playSolve')) return;
+  beep(523.25, 0.5); beep(659.25, 0.6); beep(783.99, 0.8);
+}
+export function playHint() { if (!tryPlaySample('playHint')) beep(880, 0.16); }
+export function playErase() { if (!tryPlaySample('playErase')) beep(300, 0.09); }
+export function playPause() { if (!tryPlaySample('playPause')) beep(220, 0.20); }
+export function playResume() { if (!tryPlaySample('playResume')) beep(330, 0.20); }
+export function playMode() { if (!tryPlaySample('playMode')) beep(494, 0.12); }

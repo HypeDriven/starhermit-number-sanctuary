@@ -1,12 +1,13 @@
 'use strict';
 
 // Number Sanctuary — StarHermit authoritative game server (Node.js).
-// Serves the browser distribution and provides /api and /ws routes.
+// Serves only the browser distribution: the launch bundle, sfx/* and assets/*.
+// The game is single-player with no shared state, so there are no /api or
+// /ws routes.
 
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 
 const DIST_ROOT = __dirname;
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : (parseInt(process.env.STARHERMIT_PORT || '80', 10));
@@ -18,6 +19,7 @@ const FILES = {
   '/main.js': 'main.js',
   '/rules.js': 'rules.js',
   '/audio.js': 'audio.js',
+  '/i18n.js': 'i18n.js',
   '/style.css': 'style.css',
   '/three.min.js': 'three.min.js',
   '/favicon.svg': 'favicon.svg',
@@ -34,6 +36,7 @@ function contentType(p) {
   if (p.endsWith('.opus')) return 'audio/ogg; codecs=opus';
   if (p.endsWith('.svg')) return 'image/svg+xml';
   if (p.endsWith('.png')) return 'image/png';
+  if (p.endsWith('.webp')) return 'image/webp';
   return 'application/octet-stream';
 }
 
@@ -43,12 +46,19 @@ function sfxFile(p) {
   return m ? 'sfx/' + m[1] : null;
 }
 
+// Authored art (stone scan, courtyard backdrop) lives under assets/.
+function assetFile(p) {
+  const m = /^\/assets\/([a-z0-9-]+\.(?:webp|png|glb))$/.exec(p);
+  return m ? 'assets/' + m[1] : null;
+}
+
 const server = http.createServer((req, res) => {
   const url = req.url || '/';
   let p = url.split('?')[0];
   const sfx = sfxFile(p);
-  if (!(p in FILES) && !sfx) { res.writeHead(404); res.end('not found'); return; }
-  const file = path.join(DIST_ROOT, sfx || FILES[p]);
+  const asset = assetFile(p);
+  if (!(p in FILES) && !sfx && !asset) { res.writeHead(404); res.end('not found'); return; }
+  const file = path.join(DIST_ROOT, sfx || asset || FILES[p]);
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(500); res.end('error: ' + err.message); return; }
     res.writeHead(200, { 'Content-Type': contentType(file), 'Cache-Control': 'no-cache' });
