@@ -74,13 +74,30 @@ button:focus-visible { outline: 3px solid #f6e05e; outline-offset: 2px; }
 .score-list li { display: flex; justify-content: space-between; gap: 24px; padding: 3px 0; }
 .score-list li.total { border-top: 1px solid #3a4550; margin-top: 6px; padding-top: 6px; font-weight: bold; }
 
+/* short landscape: status top-left, controls in a scrolling right column */
+@media (max-height: 520px) and (orientation: landscape) {
+  .topbar { padding: 4px 10px; gap: 6px; }
+  .mode-btn { min-height: 34px; padding: 4px 8px; font-size: 13px; }
+  .left-panel { left: 8px; top: 8px; width: 190px; padding: 8px 10px; }
+  #status-text { font-size: 12px; }
+  .readout { display: none; }
+  .right-panel { right: 8px; top: 8px; bottom: 8px; width: 210px; padding: 8px 10px; overflow-y: auto; }
+  .right-panel h2 { font-size: 13px; margin-bottom: 4px; }
+  .pad-btn { min-height: 36px; font-size: 15px; }
+  .action-btn { min-height: 34px; font-size: 11px; }
+  .info-list { display: none; }
+}
+
 @media (max-width: 700px) {
   .topbar { align-items: flex-start; flex-direction: column; gap: 8px; padding: 8px 10px; }
   .modes { width: 100%; flex-wrap: wrap; gap: 5px; }
   .mode-btn { flex: 1 1 28%; min-height: 36px; padding: 5px 7px; }
-  .left-panel { left: 8px; top: 8px; width: calc(100% - 16px); padding: 8px 10px; }
+  .left-panel { left: 8px; top: 8px; width: calc(100% - 16px); padding: 6px 10px; }
+  .left-panel h2 { display: none; }
   #status-text { font-size: 12px; }
   .readout { display: none; }
+  .progress-wrap { margin-top: 4px; }
+  .progress-label { display: none; }
   .right-panel {
     right: 8px; left: 8px; top: auto; bottom: 8px; width: auto;
     padding: 8px 10px; max-height: 46%; overflow-y: auto;
@@ -89,8 +106,9 @@ button:focus-visible { outline: 3px solid #f6e05e; outline-offset: 2px; }
   .pad { grid-template-columns: repeat(5, 1fr); }
   .pad-btn { min-height: 38px; font-size: 16px; }
   .pad-btn.wide { grid-column: 4 / -1; }
-  .actions { gap: 5px; }
-  .action-btn { flex: 1 1 30%; font-size: 11px; }
+  .right-panel h2 { display: none; }
+  .actions { gap: 5px; margin-top: 6px; }
+  .action-btn { flex: 1 1 30%; font-size: 11px; min-height: 32px; }
   .info-list { display: none; }
   .overlay { min-width: 0; width: calc(100% - 24px); padding: 16px; }
 }

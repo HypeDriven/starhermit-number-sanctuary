@@ -271,18 +271,59 @@ function viewSize() {
   return { w: Math.max(1, w), h: Math.max(1, h) };
 }
 
-// Frame the whole board regardless of aspect: on narrow/portrait viewports the
-// camera pulls back so no column falls off screen.
+// The canvas rectangle not covered by the HUD panels (each panel hugs one
+// edge: status top/left, controls right/bottom depending on the breakpoint).
+function safeRect(w, h) {
+  let l = 0, t = 0, r = w, b = h;
+  const cr = canvas.getBoundingClientRect();
+  for (const el of document.querySelectorAll('.stage .panel')) {
+    if (el.hidden || getComputedStyle(el).display === 'none') continue;
+    const bb = el.getBoundingClientRect();
+    if (!bb.width || !bb.height) continue;
+    const e = { l: bb.left - cr.left, t: bb.top - cr.top, r: bb.right - cr.left, b: bb.bottom - cr.top };
+    if (e.r - e.l > w * 0.6) { // full-width band: top or bottom
+      if (e.t < h * 0.5) t = Math.max(t, e.b); else b = Math.min(b, e.t);
+    } else if (e.l < w * 0.5) l = Math.max(l, e.r); else r = Math.min(r, e.l);
+  }
+  if (r - l < w * 0.4) { l = 0; r = w; }
+  if (b - t < h * 0.4) { t = Math.min(t, h * 0.3); b = Math.max(b, h * 0.7); }
+  return { x: l, y: t, w: r - l, h: b - t };
+}
+
+// Frame the whole board inside the HUD-free rectangle regardless of aspect:
+// a view offset centres it there and the camera pulls back until every
+// column and row fits with a margin.
 function frameCamera() {
   const { w, h } = viewSize();
-  camera.aspect = w / h;
+  const sr = safeRect(w, h);
+  camera.aspect = sr.w / sr.h;
+  camera.setViewOffset(sr.w, sr.h, -sr.x, -sr.y, w, h);
   const boardSpan = SIZE * CELL_SIZE + GAP * SIZE;
   const vFov = (camera.fov * Math.PI) / 180;
   const distV = (boardSpan * 0.75) / Math.tan(vFov / 2);
   const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
   const distH = (boardSpan * 0.6) / Math.tan(hFov / 2);
-  const dist = Math.max(distV, distH, SIZE * CELL_SIZE * 1.05 + 3);
-  camera.position.set(0, dist * 0.75, dist * 0.72);
+  let dist = Math.max(distV, distH, SIZE * CELL_SIZE * 1.05 + 3);
+  // refine against the projected board corners (tilted board, near edge wider)
+  const half = boardSpan / 2 + 0.4;
+  const corners = [];
+  for (const x of [-half, half]) for (const z of [-half, half]) corners.push(new THREE.Vector3(x, 0.3, z));
+  const v = new THREE.Vector3();
+  // narrow safe rects get a steeper (more top-down) view so the board uses
+  // the width instead of shrinking under foreshortening
+  const steep = camera.aspect < 0.9;
+  const ey = steep ? 0.95 : 0.75, ez = steep ? 0.4 : 0.72;
+  for (let i = 0; i < 10; i++) {
+    camera.position.set(0, dist * ey, dist * ez);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    let worst = 0;
+    for (const c of corners) { v.copy(c).project(camera); worst = Math.max(worst, Math.abs(v.x), Math.abs(v.y)); }
+    if (worst <= 0.94) break;
+    dist *= Math.min(1.5, worst / 0.94 + 0.01);
+  }
+  camera.position.set(0, dist * ey, dist * ez);
   camera.lookAt(0, 0, 0);
   camera.updateProjectionMatrix();
   camera.updateMatrixWorld();
@@ -742,6 +783,13 @@ for (const btn of actionBtns) {
 }
 
 window.addEventListener('resize', resize);
+// The stage and the HUD panels change size without a window resize (chat
+// sidebar, orientation, pad contents): keep the renderer and framing in sync.
+if (typeof ResizeObserver === 'function') {
+  const ro = new ResizeObserver(() => resize());
+  ro.observe(canvas.parentElement || canvas);
+  for (const el of document.querySelectorAll('.stage .panel')) ro.observe(el);
+}
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) setPaused(true);
 });
