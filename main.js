@@ -4,6 +4,7 @@ const THREE = window.THREE;
 import { generateGrid, makePuzzle } from './rules.js';
 import * as audio from './audio.js';
 import { t, getLocale } from './i18n.js';
+import * as platform from './platform.js';
 
 // ---------------------------------------------------------------------------
 // Constants and static data
@@ -131,7 +132,8 @@ function filledCount() {
 }
 
 // ---------------------------------------------------------------------------
-// Persistence (local only — never store host or launch tokens)
+// Persistence (localStorage is the offline cache; the platform cloud save is
+// a mirror when a launch token is present — never store host or launch tokens)
 // ---------------------------------------------------------------------------
 
 function loadStore() {
@@ -141,27 +143,30 @@ function loadStore() {
     const data = JSON.parse(raw);
     if (!data || typeof data !== 'object') return null;
     if (data.best && typeof data.best === 'object') best = data.best;
-    return data.round || null;
+    return data;
   } catch (e) { return null; }
 }
 
 function saveStore() {
+  const doc = {
+    best,
+    round: {
+      mode, difficulty, puzzleSeed, moves, mistakes, hints, gameOver,
+      board, given, notes: Array.from(notes),
+      elapsed: elapsedSeconds(),
+    },
+  };
   try {
-    localStorage.setItem(STORE_KEY, JSON.stringify({
-      best,
-      round: {
-        mode, difficulty, puzzleSeed, moves, mistakes, hints, gameOver,
-        board, given, notes: Array.from(notes),
-        elapsed: elapsedSeconds(),
-      },
-    }));
+    localStorage.setItem(STORE_KEY, JSON.stringify(doc));
   } catch (e) { /* storage unavailable or full: play continues */ }
+  platform.scheduleCloudSave(JSON.stringify(doc));
 }
 
 function restoreRound(r) {
   if (!r || !MODES.includes(r.mode) || !DIFFICULTIES.includes(r.difficulty)) return false;
   if (!Array.isArray(r.board) || r.board.length !== SIZE * SIZE) return false;
   if (!Array.isArray(r.given) || r.given.length !== SIZE * SIZE) return false;
+  if (!Number.isFinite(r.puzzleSeed)) return false;
   mode = r.mode; difficulty = r.difficulty;
   buildPuzzle(r.puzzleSeed >>> 0);
   // keep the regenerated solution/givens, then re-apply the player's digits
@@ -423,6 +428,9 @@ const padEl = document.getElementById('number-pad');
 const actionBtns = Array.from(document.querySelectorAll('.action-btn'));
 const noteBtn = document.querySelector('.action-btn[data-action="note"]');
 const cellReadoutEl = document.getElementById('cell-readout');
+const playerLineEl = document.getElementById('player-line');
+const playerNameEl = document.getElementById('player-name');
+const syncStatusEl = document.getElementById('sync-status');
 
 // Apply the active locale to every statically authored string in index.html.
 // Elements carry data-i18n (text) and/or data-i18n-aria-label.
@@ -765,12 +773,47 @@ modeBtns.forEach((btn) => {
 });
 
 // ---------------------------------------------------------------------------
-// Boot: restore or build a round, then start rendering
+// StarHermit platform hookup: inert without a launch token, so local/offline
+// play makes no network calls and shows no account line
+// ---------------------------------------------------------------------------
+
+platform.init({
+  onProfile(name) {
+    if (playerNameEl) playerNameEl.textContent = name;
+    if (playerLineEl) playerLineEl.hidden = false;
+  },
+  onSync(state) {
+    if (syncStatusEl) syncStatusEl.textContent = t('sync.' + state);
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Boot: restore (cloud-preferred when hosted) or build a round, then render.
+// Without a token the cloud probe is skipped entirely — offline boot is
+// unchanged.
 // ---------------------------------------------------------------------------
 
 setRulesSeed((Date.now() ^ 0x5EED) >>> 0);
-const savedRound = loadStore();
-if (!savedRound || !restoreRound(savedRound)) {
+let cloudDoc = null;
+if (platform.hasSession()) {
+  cloudDoc = await Promise.race([
+    platform.loadCloud(),
+    new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+  ]);
+}
+const saved = loadStore();
+const savedRound = saved && saved.round;
+let restored = !!(savedRound && restoreRound(savedRound));
+// Remote-preferred load: a differing remote doc wins over the local cache.
+if (cloudDoc && typeof cloudDoc === 'object') {
+  const localSnap = JSON.stringify({ best: (saved && saved.best) || {}, round: savedRound || null });
+  const cloudSnap = JSON.stringify({ best: cloudDoc.best || {}, round: cloudDoc.round || null });
+  if (cloudSnap !== localSnap) {
+    if (cloudDoc.best && typeof cloudDoc.best === 'object') best = cloudDoc.best;
+    restored = restoreRound(cloudDoc.round) || restored;
+  }
+}
+if (!restored) {
   setActiveMode(mode);
   buildPuzzle(nextSeed());
 } else {

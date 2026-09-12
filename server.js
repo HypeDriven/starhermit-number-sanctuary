@@ -17,6 +17,7 @@ const FILES = {
   '/': 'index.html',
   '/index.html': 'index.html',
   '/main.js': 'main.js',
+  '/platform.js': 'platform.js',
   '/rules.js': 'rules.js',
   '/audio.js': 'audio.js',
   '/i18n.js': 'i18n.js',

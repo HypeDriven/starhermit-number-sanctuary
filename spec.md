@@ -17,14 +17,15 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | Session length | 4–20 min per grid (Easy ≈ 4–8 min, Hard ≈ 12–25 min); resumable, so a session can be one cell long |
 | Platforms | Desktop and mobile browsers; portrait and landscape |
 | Rendering | Three.js WebGL board on `#scene-canvas`, with all controls and readouts as real DOM over it |
-| Persistence | `localStorage` only — no account, no network calls at runtime |
+| Persistence | `localStorage` offline cache; with a StarHermit launch token the same doc also mirrors to the platform cloud-save slot |
 
 ### File map
 
 | Path | Owns |
 |---|---|
 | `index.html` | Static DOM: top bar, mode tablist, status panel, number pad, action row, overlay host. All translatable nodes carry `data-i18n` / `data-i18n-aria-label`. |
-| `main.js` | Everything stateful: game state, per-mode puzzle construction, scoring, persistence, the Three.js scene, input handling, and the `Game` QA surface. |
+| `main.js` | Everything stateful: game state, per-mode puzzle construction, scoring, persistence, the Three.js scene, input handling, the StarHermit hookup, and the `Game` QA surface. |
+| `platform.js` | StarHermit adapter: launch-token read/strip, Bearer on every call, 45-min token refresh, profile nickname, and the zip+base64 cloud save (remote-preferred load, 2 s debounce, pagehide flush). Inert — no network, no UI — without a token. |
 | `rules.js` | Pure, I/O-free Sudoku engine: `generateGrid`, `countSolutions`, `makePuzzle`, `solve`, `boxIndex`. Dual-exported (ESM + `module.exports`) so `tests/rules.mjs` can import it under Node. |
 | `audio.js` | WebAudio bus, gesture unlock, sample loading/rotation, and a synth fallback per event. |
 | `i18n.js` | Nine-locale string table, locale detection, `t(key, vars)`. |
@@ -498,16 +499,21 @@ locale.
   `cover=coverart.png`, per the platform's manifest convention (https://wiki.starhermit.com/).
 - `server.js` is registered as the game's server script and runs as the authoritative static host
   for the launch bundle. It binds `STARHERMIT_PORT` (or `PORT`, defaulting to 80), and serves an
-  explicit allow-list: the eight bundle files plus `sfx/*.{opus,json}` and `assets/*.{webp,png,glb}`
+  explicit allow-list: the nine bundle files plus `sfx/*.{opus,json}` and `assets/*.{webp,png,glb}`
   matched against strict regexes. `tests/`, `tools/` and dotfiles are unreachable by construction.
 - `coverart.png` (1200×675) and `icon.png` (256×256) supply the platform's store presentation.
 
-**Not used, and why.** Number Sanctuary is a single-player puzzle with no shared state, so it calls
-no StarHermit runtime API: no identity or profile lookup, no presence, no leaderboards, no
-achievements, no session or matchmaking service, and no server-side rules validation. Bests are
-local integers in `localStorage`. Nothing about the game is authoritative on the server — the client
-generates and validates its own puzzles — and no host or launch token is ever persisted. §17 records
-the leaderboard/identity work this leaves on the table.
+**Used (hosted mode), and why.** When the platform launch URL carries `#game_token=<jwt>`, the
+client authenticates with the documented runtime API (`platform.js`): the token is read once and
+stripped, `sub`/`game_scope` are decoded from the payload, every REST call carries
+`Authorization: Bearer`, the token is refreshed via `POST /api/v1/games/{slug}/launch-token` every
+45 min, and the account nickname (`GET /api/v1/users/{sub}/profile`, never `/api/v1/me`, never
+usernames) is shown with a cloud-sync status in the status panel. The `{best, round}` doc mirrors
+to `GET`/`PUT /api/v1/me/cloud-saves/{slug}` as zip+base64 (remote wins on conflict); localStorage
+stays the offline cache. Leaderboards stay untouched — clients cannot submit scores — and there is
+no presence, achievements, session, or matchmaking surface: nothing about the puzzle is
+authoritative on the server, and no host or launch token is ever persisted. `server.js` itself
+still serves only static files. §17 records the ranked-leaderboard work this leaves on the table.
 
 ---
 
@@ -516,7 +522,8 @@ the leaderboard/identity work this leaves on the table.
 **Module responsibilities.** `rules.js` is pure with no DOM or global dependencies, which lets
 `tests/rules.mjs` exercise it under plain Node. `main.js` is the only module holding mutable game
 state and the only one touching the DOM or Three.js. `audio.js` and `i18n.js` never read game state.
-Dependencies run strictly one way: `main.js → {rules, audio, i18n}`.
+`platform.js` owns all StarHermit I/O and is driven only by `main.js`. Dependencies run strictly
+one way: `main.js → {rules, audio, i18n, platform}`.
 
 **Determinism and replay.** A round is fully described by `(seed, difficulty)`; the solution and the
 clue set are regenerated from the seed on every load rather than stored. `generateGrid` and
@@ -530,7 +537,11 @@ the same grid on any machine — which is what makes the Daily identical for eve
 lengths, rebuilds the puzzle from the seed, then re-applies only the player's digits over the
 regenerated clues — a corrupted or stale save is rejected and a fresh round is built instead. Every
 storage access is wrapped in `try/catch`, so private mode or a full quota degrades to a non-resuming
-but fully playable game. `localStorage['number-sanctuary:lang']` holds the language override.
+but fully playable game. `localStorage['number-sanctuary:lang']` holds the language override. In
+hosted mode the same doc is zipped (stored entry, CRC32) + base64'd into the single platform
+cloud-save slot: `PUT` is debounced ~2 s and flushed on `pagehide`/`visibilitychange`, and at boot
+a differing remote doc wins over the local cache (bounded 1.5 s probe). Without a token none of
+this runs — localStorage alone is the whole story.
 
 **Performance budgets.** 81 tile meshes + 81 sprites + 1 plane + 1 ring ≈ 165 objects, one shared
 box geometry, one material per tile, and one cached texture per distinct digit (≤9 textures for the
@@ -648,9 +659,11 @@ stack.
    speed targets, no-hint runs).
 3. **`prefers-reduced-motion` branch** — drop the progress-bar transition and replace the 220 ms
    rejection flash with a persistent border until the next input.
-4. **StarHermit leaderboards and identity** — post `(seed, difficulty, total, elapsed)` for Daily to
-   a platform leaderboard and show the player's rank on the results overlay, with the tie-break
-   order: higher total, then fewer mistakes, then lower elapsed, then stable session id.
+4. **StarHermit leaderboards** — post `(seed, difficulty, total, elapsed)` for Daily to a platform
+   leaderboard and show the player's rank on the results overlay, with the tie-break
+   order: higher total, then fewer mistakes, then lower elapsed, then stable session id. Identity,
+   nickname display, and the cloud save are already wired (§12); clients still cannot submit
+   scores themselves, so this needs the platform-owned board and its read-only entries API.
 5. **Hero lantern model** — a TRELLIS-generated stone lantern beside the board, which needs a
    `GLTFLoader` vendored alongside the current legacy Three.js build.
 6. **In-game language picker** — the nine locales are selectable today only via `?lang=` or the
