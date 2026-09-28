@@ -103,6 +103,9 @@ function tryPlaySample(event) {
 
 // --- synthesized fallback -------------------------------------------------------
 function beep(freq, durSec) {
+  // Before any user gesture the context could not start anyway, and creating
+  // it then only earns an autoplay warning (e.g. results restored at boot).
+  if (!_unlocked) return;
   try {
     const c = ctx();
     const osc = c.createOscillator();

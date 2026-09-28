@@ -6,13 +6,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Number Sanctuary</title>
 <link rel="stylesheet" href="./style.css" />
-<script src="./three.min.js?v=production-qa-1"></script>
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
+</script>
 <script type="module" src="./main.js?v=production-qa-1"></script>
 </head>
 <body>
 <div id="app">
   <header class="topbar">
-    <h1 class="title" data-i18n="app.title">Number Sanctuary</h1>
+    <div class="title-row">
+      <h1 class="title" data-i18n="app.title">Number Sanctuary</h1>
+      <span id="fps-meter" class="fps-meter" aria-hidden="true" hidden></span>
+      <button type="button" id="settings-btn" class="settings-btn" aria-haspopup="dialog" data-i18n="settings.button">Settings</button>
+    </div>
     <div class="modes" role="tablist" aria-label="Game modes" data-i18n-aria-label="aria.modes">
       <button data-mode="learn" class="mode-btn active" role="tab" aria-selected="true" data-i18n="mode.learn">Learn</button>
       <button data-mode="journey" class="mode-btn" role="tab" aria-selected="false" tabindex="-1" data-i18n="mode.journey">Journey</button>
@@ -66,6 +72,16 @@
 
     <div id="overlay" class="overlay hidden" role="status" aria-live="polite"></div>
   </main>
+
+  <div id="settings" class="settings-backdrop" hidden>
+    <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+      <div class="settings-head">
+        <h2 id="settings-title" data-i18n="settings.title">Settings</h2>
+        <button type="button" id="settings-close" class="action-btn" data-i18n="settings.close">Close</button>
+      </div>
+      <section id="gfx-section" class="gfx-section" aria-labelledby="gfx-heading"></section>
+    </div>
+  </div>
 </div>
 </body>
 </html>

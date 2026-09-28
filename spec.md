@@ -16,26 +16,29 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | Players | 1, offline; scores compared only against the player's own local bests |
 | Session length | 4–20 min per grid (Easy ≈ 4–8 min, Hard ≈ 12–25 min); resumable, so a session can be one cell long |
 | Platforms | Desktop and mobile browsers; portrait and landscape |
-| Rendering | Three.js WebGL board on `#scene-canvas`, with all controls and readouts as real DOM over it |
+| Rendering | Three.js (r160 ES modules) WebGL board on `#scene-canvas`, with all controls and readouts as real DOM over it; Graphics quality presets from Low to Ultra |
 | Persistence | `localStorage` offline cache; with a StarHermit launch token the same doc also mirrors to the platform cloud-save slot |
 
 ### File map
 
 | Path | Owns |
 |---|---|
-| `index.html` | Static DOM: top bar, mode tablist, status panel, number pad, action row, overlay host. All translatable nodes carry `data-i18n` / `data-i18n-aria-label`. |
-| `main.js` | Everything stateful: game state, per-mode puzzle construction, scoring, persistence, the Three.js scene, input handling, the StarHermit hookup, and the `Game` QA surface. |
+| `index.html` | Static DOM: top bar (title, frame-rate readout, Settings button), mode tablist, status panel, number pad, action row, overlay host, Settings dialog shell; the import map for `three` / `three/addons/`. All translatable nodes carry `data-i18n` / `data-i18n-aria-label`. |
+| `main.js` | Everything stateful: game state, per-mode puzzle construction, scoring, persistence, the Three.js scene and its graphics settings (`applyGraphics`, `graphicsInfo`, post chain, adaptive resolution, ambient motion), input handling, the StarHermit hookup, and the `Game` QA surface. |
+| `gfx.js` | Pure graphics quality model (no three.js): presets, categories and tiers, `detectPreset`, `resolve`, `choosePreset`, `presetTier`, `describe`. |
+| `settings.js` | The Settings dialog's Graphics section: builds the controls, reflects saved/resolved settings, open/close, focus trap. Talks to `main.js` only through callbacks. |
 | `platform.js` | StarHermit adapter: launch-token read/strip, Bearer on every call, 45-min token refresh, profile nickname, and the zip+base64 cloud save (remote-preferred load, 2 s debounce, pagehide flush). Inert — no network, no UI — without a token. |
 | `rules.js` | Pure, I/O-free Sudoku engine: `generateGrid`, `countSolutions`, `makePuzzle`, `solve`, `boxIndex`. Dual-exported (ESM + `module.exports`) so `tests/rules.mjs` can import it under Node. |
 | `audio.js` | WebAudio bus, gesture unlock, sample loading/rotation, and a synth fallback per event. |
 | `i18n.js` | Nine-locale string table, locale detection, `t(key, vars)`. |
 | `style.css` | Panel/HUD layout, palette, the ≤700 px mobile reflow. |
-| `server.js` | StarHermit game script: static host for the launch bundle, `sfx/*`, and `assets/*`. Serves nothing else. |
-| `three.min.js` | Vendored Three.js r185 legacy global build (`window.THREE`). |
+| `server.js` | StarHermit game script: static host for the launch bundle, `vendor/three/*`, `sfx/*`, and `assets/*`. Serves nothing else. |
+| `vendor/three/` | Three.js r160 (npm `three@0.160.1`): `three.module.js`, `LICENSE`, and the same-revision addons the game imports (`postprocessing/` EffectComposer, RenderPass, ShaderPass, OutputPass, UnrealBloomPass, SMAAPass and their deps; `shaders/` FXAA, SMAA, Copy, Output, LuminosityHighPass; `environments/RoomEnvironment.js`; `geometries/RoundedBoxGeometry.js`). Unmodified. |
 | `starhermit.txt` | Platform manifest (`name`, `launch`, `owner`, `server`, `cover`). |
 | `sfx/` | 19 authored Opus clips + `manifest.txt` (canonical), `manifest.md`, `manifest.json`. |
 | `assets/` | Authored art: `courtyard-stone.webp`, `sanctuary-backdrop.webp`. |
 | `tests/rules.mjs` | `npm test` — engine determinism, uniqueness, solving. |
+| `tests/gfx.test.mjs` | `npm test` (`node --test`) — the graphics quality model. |
 | `tests/e2e.mjs` | `npm run test:e2e` — full Playwright playthrough at desktop and mobile viewports. |
 | `coverart.png`, `icon.png`, `favicon.svg` | Store/tab art. |
 
@@ -259,12 +262,14 @@ game keeps is `best[difficulty]`.
 | `C` | Clear all player digits |
 | `R` | New round |
 | `P` | Toggle pause |
-| `Esc` | Pause (never unpauses — resume is deliberate) |
+| `Esc` | Pause (never unpauses — resume is deliberate); closes the Settings dialog when it is open |
 | `M` | Toggle mute |
 
 Modifier-held keys (`Ctrl`/`Meta`/`Alt`) are ignored so browser shortcuts survive. `Enter`/`Space`
 on a focused `<button>` is left to the browser so the DOM controls behave normally. Keys typed into
-an `INPUT`/`TEXTAREA` are ignored.
+an `INPUT`/`TEXTAREA` are ignored. While the Settings dialog is open the game ignores every
+shortcut: the dialog owns the keyboard (Tab cycles inside it, `Esc` closes it and returns focus to the
+button that opened it).
 
 ### Mobile
 
@@ -299,6 +304,13 @@ boot ──▶ playing ⇄ paused
                   │
                   └── R / mode tab ──▶ playing
 ```
+
+**Settings dialog.** The top bar's **Settings** button and a **Settings** button in the pause
+overlay open a modal dialog (`#settings`, `role="dialog"`) with a **Graphics** section. Opening it
+pauses a running round, so the clock never runs while the player adjusts graphics; closing it (Close,
+`Esc`, or a click on the dimmed backdrop) leaves the pause overlay up for a deliberate Resume. The
+panel is capped to the viewport and scrolls inside itself, so it fits portrait and short-landscape
+phones.
 
 `boot` restores a saved round when one validates (`restoreRound`), otherwise builds a new one. A
 saved round that was already solved re-enters `solved` and re-opens the results overlay with the
@@ -363,15 +375,59 @@ one texture per digit, not per cell.
 
 ### Motion
 
-Three motions exist: the progress bar's 200 ms width ease, the 220 ms rejection flash, and the
-camera reframe on resize. Nothing else moves. The `requestAnimationFrame` loop keeps the canvas
+Gameplay motion is the progress bar's 200 ms width ease, the 220 ms rejection flash, and the
+camera reframe on resize. Ambient motion (Graphics presets above Low): the selection ring breathes,
+the lantern flames flicker, and fireflies drift and pulse around the plinth — never over the grid.
+Ambient motion stops under `prefers-reduced-motion: reduce` (the ring holds a steady glow). The `requestAnimationFrame` loop keeps the canvas
 current and ticks the HUD clock at ~2 Hz, early-returning while the document is hidden. No camera
-drift, no tile animation, no particles — which is what lets the game run at full rate on software
-WebGL (as the e2e proves under SwiftShader).
+drift and no tile animation; the Low preset has no particles or post-processing, which is what lets
+the game run at full rate on software WebGL (as the e2e proves under SwiftShader).
 
-**Reduced motion.** Because the total motion budget is one 200 ms bar tween and one colour flash,
-the game is already close to a reduced-motion build; it does not currently branch on
-`prefers-reduced-motion` (see §17).
+**Reduced motion.** Ambient motion honours `prefers-reduced-motion`. The gameplay motions (one
+200 ms bar tween and one colour flash) do not yet branch on it (see §17).
+
+### Graphics
+
+Lighting is a cool dusk hemisphere fill, one warm key directional light from the front-left and a
+faint cool rim light from behind, rendered with ACES filmic tone mapping into sRGB output. Board
+digits are drawn in a separate last pass straight to the canvas — never tone-mapped, bloomed or
+darkened — and their sprites carry a soft dark halo, so they keep full contrast at every setting.
+Optional effects: key-light PCF soft shadows (1024²/2048²/4096², frustum fitted to the plinth;
+the scene is static, so the shadow map re-renders only when settings change); contact ambient
+occlusion baked into a grout/rim overlay under the tiles (On), plus tiles darkening towards their
+base (High) — the board never moves, so this costs nothing per frame; bloom limited to emissive
+highlights (threshold 0.9: selection ring, lantern flames, fireflies); a colour grade (gentle
+S-curve, slight saturation, warm highlights / cool shadows) with vignette; FXAA, SMAA or MSAA;
+image-based reflections from a PMREM-filtered `RoomEnvironment`; fireflies (36 or 110); and
+**Detail** — Plain is the original boxes on a flat stone plane, Detailed is rounded tiles with a
+clearcoat finish by state (clues glazed, the player's digits satin, open cells matte) and procedural
+grain in roughness and bump, a raised limestone plinth with a soft contact shadow, and four stone
+lanterns whose far pair casts warm flickering light. Post-processing (EffectComposer: RenderPass →
+UnrealBloom → OutputPass → grade → SMAA/FXAA) runs only when bloom, grade, FXAA or SMAA is on;
+otherwise the scene renders straight to the canvas with its own MSAA.
+
+The Settings dialog's **Graphics** section offers a quality preset — Auto (the default, shown as
+"Auto (detected: <tier>)"; chosen from the WebGL unmasked renderer string: software renderers get
+Low, discrete GPUs and Apple M-series get High, everything else Balanced, and touch/mobile devices
+are capped at Balanced), Low, Balanced, High, Ultra — a render scale slider (50–200% of the
+preset's), one select per effect (Shadows, Ambient occlusion, Bloom, Colour grade, Anti-aliasing,
+Reflections, Fireflies, Detail; "From preset (<tier>)" by default), Adaptive resolution (on by
+default: every 90 frames, an average over 26 ms steps the resolution down 10% to a 60% floor and
+under 14 ms steps it back up 5%) and Show frame rate (a readout in the top bar), plus a summary
+line "GPU name · cost summary · W×H px". Choosing a preset clears the per-effect overrides.
+Changes apply immediately without a reload and persist in `localStorage['number-sanctuary:gfx']`.
+Pixel ratio is min(devicePixelRatio, preset cap) × preset scale × render scale × adaptive scale,
+with caps Low 1, Balanced 1.5, High/Ultra 2 (Ultra also renders at 125%), so Low never draws more
+pixels than the game did before presets existed. If the post-processing chain cannot be built or
+fails to render, the game renders without it and the panel says so. The body carries
+`data-gfx-preset`, `data-gfx-auto` and one `data-gfx-<category>` attribute per effect for tests.
+
+| Preset | Shadows | AO | Bloom | Grade | AA | Reflections | Fireflies | Detail | DPR cap |
+|---|---|---|---|---|---|---|---|---|---|
+| Low | off | off | off | off | MSAA | off | off | plain | 1 |
+| Balanced | 1024² | on | on | on | FXAA | on | 36 | detailed | 1.5 |
+| High | 2048² | on | on | on | SMAA | on | 110 | detailed | 2 |
+| Ultra | 4096² | high | on | on | MSAA | on | 110 | detailed | 2 (×1.25) |
 
 ### The hero
 
@@ -403,7 +459,9 @@ what makes the placement tap land.
 
 **Unlock and fallback.** The AudioContext resumes on the first `pointerdown` or `keydown`; sample
 fetches start only after that. Until a clip has decoded — and permanently if it 404s or fails to
-decode — the event is carried by a sine `beep()` fallback, so no input is ever silent. The three
+decode — the event is carried by a sine `beep()` fallback, so no input is ever silent. Before the
+first gesture nothing is played or created (the solve chime of a results screen restored at boot is
+skipped), which keeps the browser's autoplay warning out of the console. The three
 high-frequency events rotate round-robin through four clips each so a run of placements never
 repeats a sample back to back.
 
@@ -459,6 +517,10 @@ boot, and the active tag is exposed on `Game.state.locale`.
 `[data-i18n-aria-label]` (aria-label) once at boot; dynamic text — the status line, cell readout,
 mute button label, and both overlays — calls `t()` at build time with `{name}` interpolation.
 
+**Settings strings.** The Settings dialog and every Graphics label, tier, summary fragment and
+the post-processing note are localized in all nine locales (`settings.*`, `gfx.*` keys); acronyms
+(FXAA/SMAA/MSAA) and the GPU name stay as-is.
+
 **Expansion allowance.** Panels are fixed-width (300 px / 260 px) and buttons are flex-sized, so
 strings must fit roughly 1.4× the English length. Action-button labels keep their Latin shortcut
 letter untranslated in parentheses (`Aiuto (H)`), because the key binding does not change with the
@@ -487,8 +549,11 @@ locale.
   is ~6:1. Board digits are white on saturated mid-tones.
 - **Target sizes.** Pad buttons ≥40 px desktop / 38 px mobile; action buttons ≥34 px; mode tabs
   36 px on mobile. Board cells are far larger than any of these at every framing.
-- **Reduced motion.** The entire motion budget is a 200 ms bar tween and a 220 ms colour flash; see
-  §17 for the explicit media-query branch.
+- **Reduced motion.** Ambient graphics motion (fireflies, flicker, ring breathing) stops under
+  `prefers-reduced-motion`; the gameplay motion budget is a 200 ms bar tween and a 220 ms colour
+  flash — see §17.
+- **Settings dialog.** Every control is a native `<select>`, range or checkbox with a `<label>`;
+  it opens with focus on Quality, traps Tab, closes on `Esc` and returns focus to its opener.
 
 ---
 
@@ -520,10 +585,11 @@ still serves only static files. §17 records the ranked-leaderboard work this le
 ## 13. Technical architecture
 
 **Module responsibilities.** `rules.js` is pure with no DOM or global dependencies, which lets
-`tests/rules.mjs` exercise it under plain Node. `main.js` is the only module holding mutable game
-state and the only one touching the DOM or Three.js. `audio.js` and `i18n.js` never read game state.
+`tests/rules.mjs` exercise it under plain Node; `gfx.js` is likewise pure and tested under Node.
+`main.js` is the only module holding mutable game state and the only one touching Three.js;
+`settings.js` touches only the Settings dialog's DOM. `audio.js` and `i18n.js` never read game state.
 `platform.js` owns all StarHermit I/O and is driven only by `main.js`. Dependencies run strictly
-one way: `main.js → {rules, audio, i18n, platform}`.
+one way: `main.js → {rules, audio, i18n, platform, gfx, settings}` and `settings → gfx`.
 
 **Determinism and replay.** A round is fully described by `(seed, difficulty)`; the solution and the
 clue set are regenerated from the seed on every load rather than stored. `generateGrid` and
@@ -537,7 +603,9 @@ the same grid on any machine — which is what makes the Daily identical for eve
 lengths, rebuilds the puzzle from the seed, then re-applies only the player's digits over the
 regenerated clues — a corrupted or stale save is rejected and a fresh round is built instead. Every
 storage access is wrapped in `try/catch`, so private mode or a full quota degrades to a non-resuming
-but fully playable game. `localStorage['number-sanctuary:lang']` holds the language override. In
+but fully playable game. `localStorage['number-sanctuary:lang']` holds the language override and
+`localStorage['number-sanctuary:gfx']` the graphics settings (`{ preset, render_scale, adaptive,
+show_fps, <category>: tier }`; absent keys mean Auto / from preset); neither is mirrored to the cloud. In
 hosted mode the same doc is zipped (stored entry, CRC32) + base64'd into the single platform
 cloud-save slot: `PUT` is debounced ~2 s and flushed on `pagehide`/`visibilitychange`, and at boot
 a differing remote doc wins over the local cache (bounded 1.5 s probe). Without a token none of
@@ -546,7 +614,8 @@ this runs — localStorage alone is the whole story.
 **Performance budgets.** 81 tile meshes + 81 sprites + 1 plane + 1 ring ≈ 165 objects, one shared
 box geometry, one material per tile, and one cached texture per distinct digit (≤9 textures for the
 whole game). No per-frame allocation in `animate`; the HUD string is rebuilt at most twice a second;
-`render()` is called on demand from `refresh()` as well as per frame. `setPixelRatio` is capped at 2.
+`render()` is called on demand from `refresh()` as well as per frame. The pixel ratio is capped per
+preset (§8 Graphics) and never exceeds 3; the shadow map renders only on settings changes.
 The whole scene renders at full rate under SwiftShader in CI, which is the effective floor.
 
 **How the e2e drives the real UI.** `tests/e2e.mjs` serves the repo over a loopback HTTP server and
@@ -569,7 +638,13 @@ target, the puzzle still has exactly one solution, and `solve()` returns the ori
 a grid with a duplicated digit, an empty array, and an all-10s array each yield `countSolutions = 0`
 and `solve = null`.
 
-**`npm run test:e2e` → `tests/e2e.mjs`** runs 14 desktop steps (1280×800) and 13 mobile steps
+**`npm test` → `tests/gfx.test.mjs`** (`node --test`) asserts `detectPreset` on sample GPU strings
+(SwiftShader/llvmpipe → Low, GeForce/Apple M → High, Intel → Balanced, mobile capped at Balanced),
+`resolve()` for Auto, explicit presets, per-effect overrides, invalid values and the 50–200%
+render-scale clamp, that choosing a preset clears overrides while keeping scale and toggles, and
+the `describe()` summary.
+
+**`npm run test:e2e` → `tests/e2e.mjs`** runs 15 desktop steps (1280×800) and 14 mobile steps
 (390×844, touch): boot shows the title, the canvas, five mode tabs, an Easy status line and exactly
 41 clues consistent with the solution; the mode tabs move difficulty Easy→Medium→Hard→Easy; a canvas
 click selects the centre cell; a keyboard digit fills a cell and advances progress and score; a
@@ -577,7 +652,11 @@ row-clashing digit is refused and increments mistakes; the pad places and erases
 mark; `H` fills one correct cell and counts a hint; `P` opens the overlay, the Resume button closes
 it, and mute toggles via both button and `M`; arrows move the selection to the expected indices; a
 reload restores mode, seed and board; `C` removes only player digits and resets counters; `R`
-produces a different seed with reset counters. Desktop additionally solves all 81 cells through the
+produces a different seed with reset counters; and through the visible Settings button the Graphics
+section fits the viewport, pauses the round, shows "Auto (detected: Low)" under SwiftShader, applies
+Low then High (checked via `data-gfx-*` on `<body>` and the summary line), a Bloom override, the
+render-scale slider and the frame-rate toggle live, keeps them across a reload, clears overrides
+when Ultra is chosen, and returns to Auto. Any console error **or warning** fails a pass. Desktop additionally solves all 81 cells through the
 UI, reaches the results overlay, and verifies the score is frozen and survives a reload.
 
 **QA bar (agents/qa.md) as checkable statements.**
@@ -586,8 +665,8 @@ UI, reaches the results overlay, and verifies the score is frozen and survives a
 2. *Every implemented feature usable in the browser* — the e2e reaches every one of them (mode tabs,
    selection, keyboard and pad entry, rejection, mark, hint, pause/resume, mute, clear, restart,
    persistence, completion) through the visible UI. ✔
-3. *No console errors or warnings* — both passes fail on any `pageerror` or console error outside the
-   allow-listed GPU/SwiftShader noise. ✔
+3. *No console errors or warnings* — both passes fail on any `pageerror`, console error or console
+   warning outside the allow-listed GPU/SwiftShader noise, with Low, High and Ultra all rendered. ✔
 4. *Nothing cut off, desktop and mobile* — `frameCamera` guarantees all nine columns fit at any
    aspect; the ≤700 px layout moves the controls to a scrollable bottom sheet and drops the two
    optional text blocks. Screenshots are captured at every stage of both passes. ✔
@@ -613,8 +692,8 @@ UI, reaches the results overlay, and verifies the score is frozen and survives a
 | `sfx/manifest.json` / `manifest.md` | Generator input / readable mirror, kept in sync with `.txt` | authored | shipped |
 | `coverart.png` | 1200×675 platform cover | prior FLUX pass | shipped |
 | `icon.png`, `favicon.svg` | 256² platform icon, tab icon | authored | shipped |
-| `three.min.js` | Three.js r185 legacy global build | vendored | shipped |
-| — | Hero 3D prop (courtyard lantern beside the board) | TRELLIS | not generated: `three.min.js` is the legacy global build with no `GLTFLoader`, so loading a GLB would need a new vendored dependency — out of scope for a safe wiring pass |
+| `vendor/three/` | Three.js r160 ES module build + same-revision addons | npm `three@0.160.1` | vendored, shipped |
+| — | Hero 3D prop (courtyard lantern beside the board) | TRELLIS | not generated; the Detailed graphics tier builds procedural stone lanterns instead. Loading a GLB needs `GLTFLoader` vendored from the same r160 addons |
 | — | Character animation | Kimodo | not applicable: no humanoid in the game |
 
 Board digits are drawn at runtime into a 128 px canvas per digit (`makeTextSprite`), not shipped as
@@ -645,8 +724,11 @@ stack.
   into each cell; the score falls but the round never ends.
 - **The board plane texture is largely hidden.** The 81 tiles cover most of the floor, so the
   limestone scan reads only at the board's rim.
-- **`three.min.js` is committed at the repo root** rather than under `vendor/`, and `package.json`
-  also lists `three` as a dependency that the browser build does not use.
+- **`package.json` lists `three` (^0.185) as a dependency** that the browser build does not use;
+  the game ships the vendored r160 under `vendor/three/`.
+- **Ambient occlusion is baked, not screen-space.** The r160 GTAO pass produced a large black
+  artefact on this scene, and the board is static, so contact occlusion is baked into the scene
+  instead; it does not react to the lanterns or the selection ring.
 
 ---
 
@@ -657,14 +739,15 @@ stack.
 2. **Mode-specific rules** — scripted Learn lessons that require the player to perform each
    technique, an authored Journey ladder with mastery checks, and Challenge constraints (move caps,
    speed targets, no-hint runs).
-3. **`prefers-reduced-motion` branch** — drop the progress-bar transition and replace the 220 ms
-   rejection flash with a persistent border until the next input.
+3. **`prefers-reduced-motion` branch for gameplay feedback** — drop the progress-bar transition and
+   replace the 220 ms rejection flash with a persistent border until the next input (ambient
+   graphics motion already honours it).
 4. **StarHermit leaderboards** — post `(seed, difficulty, total, elapsed)` for Daily to a platform
    leaderboard and show the player's rank on the results overlay, with the tie-break
    order: higher total, then fewer mistakes, then lower elapsed, then stable session id. Identity,
    nickname display, and the cloud save are already wired (§12); clients still cannot submit
    scores themselves, so this needs the platform-owned board and its read-only entries API.
 5. **Hero lantern model** — a TRELLIS-generated stone lantern beside the board, which needs a
-   `GLTFLoader` vendored alongside the current legacy Three.js build.
+   `GLTFLoader` vendored from the same r160 addons as `vendor/three/`.
 6. **In-game language picker** — the nine locales are selectable today only via `?lang=` or the
    browser's own language order; a control in the top bar is the intended surface.

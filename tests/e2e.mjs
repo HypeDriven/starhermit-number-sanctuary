@@ -69,7 +69,7 @@ async function runPass(browser, passName, viewport, hasTouch) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
   page.on('console', (m) => {
-    if (m.type() === 'error' && !browserNoise.test(m.text())) errors.push(`console: ${m.text()}`);
+    if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`console ${m.type()}: ${m.text()}`);
   });
 
   const SHOT = (stage) => `/tmp/number-sanctuary-e2e-${stage}-${passName}.png`;
@@ -258,6 +258,68 @@ async function runPass(browser, passName, viewport, hasTouch) {
       const after = await gameState();
       assert(after.mode === before.mode && after.seed === before.seed, 'round not restored after reload');
       assert(after.board.every((d, i) => d === before.board[i]), 'board not restored after reload');
+    });
+
+    await step(`${passName}: Settings > Graphics presets and overrides apply live and persist`, async () => {
+      const body = (name) => page.getAttribute('body', 'data-gfx-' + name);
+      const summary = () => page.textContent('#gfx-summary');
+      await page.click('#settings-btn');
+      await page.waitForSelector('#settings:not([hidden])');
+      const box = await page.locator('.settings-panel').boundingBox();
+      assert(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1,
+        `settings panel cut off: ${JSON.stringify(box)}`);
+      assert((await gameState()).paused, 'opening Settings did not pause the round');
+      const autoLabel = await page.textContent('#gfx-preset option[value="auto"]');
+      assert(/^Auto \(detected: Low\)$/.test(autoLabel), `unexpected Auto label: ${autoLabel}`);
+      assert(await body('preset') === 'low' && await body('auto') === 'true', 'software GPU should resolve Auto to Low');
+      assert(/SwiftShader|llvmpipe/i.test(await summary()), `summary lacks the GPU name: ${await summary()}`);
+      await page.screenshot({ path: SHOT('settings') });
+
+      await page.selectOption('#gfx-preset', 'low');
+      assert(await body('preset') === 'low' && await body('auto') === 'false', 'Low preset not applied');
+      await page.selectOption('#gfx-preset', 'high');
+      assert(await body('preset') === 'high', 'High preset not applied');
+      assert(await body('bloom') === 'on' && await body('shadows') === 'medium', 'High tiers not applied');
+      assert(/bloom/.test(await summary()), `summary missing bloom at High: ${await summary()}`);
+      const fromPreset = await page.textContent('#gfx-cat-bloom option[value="preset"]');
+      assert(fromPreset === 'From preset (On)', `unexpected preset label: ${fromPreset}`);
+      await page.selectOption('#gfx-cat-bloom', 'off');
+      assert(await body('bloom') === 'off', 'bloom override not applied');
+      assert(!/bloom/.test(await summary()), 'summary still lists bloom after turning it off');
+      await page.focus('#gfx-scale');
+      await page.keyboard.press('ArrowRight');
+      assert(await page.textContent('#gfx-scale-value') === '105%', 'render scale slider did not move');
+      await page.click('#gfx-fps');
+      assert(await page.isVisible('#fps-meter'), 'frame-rate readout not shown');
+      await page.waitForTimeout(1500); // let High render some frames
+      await page.screenshot({ path: SHOT('graphics-high') });
+      await page.keyboard.press('Escape');
+      await page.waitForSelector('#settings', { state: 'hidden' });
+
+      await page.reload({ waitUntil: 'load' });
+      await page.waitForSelector('#scene-canvas');
+      await page.waitForTimeout(300);
+      assert(await body('preset') === 'high' && await body('bloom') === 'off', 'graphics settings did not survive a reload');
+      assert(await page.isVisible('#fps-meter'), 'frame-rate toggle did not survive a reload');
+      await page.click('#settings-btn');
+      await page.waitForSelector('#settings:not([hidden])');
+      assert(await page.inputValue('#gfx-preset') === 'high', 'preset select not restored');
+      assert(await page.inputValue('#gfx-cat-bloom') === 'off', 'override select not restored');
+      assert(await page.inputValue('#gfx-scale') === '105', 'render scale not restored');
+
+      await page.selectOption('#gfx-preset', 'ultra');
+      assert(await body('preset') === 'ultra', 'Ultra preset not applied');
+      assert(await page.inputValue('#gfx-cat-bloom') === 'preset' && await body('bloom') === 'on', 'choosing a preset did not clear overrides');
+      await page.waitForTimeout(1500); // let Ultra render some frames
+      await page.selectOption('#gfx-preset', 'auto');
+      assert(await body('preset') === 'low' && await body('auto') === 'true', 'Auto not restored');
+      await page.click('#gfx-fps');
+      assert(!(await page.isVisible('#fps-meter')), 'frame-rate readout still shown');
+      await page.click('#settings-close');
+      await page.waitForSelector('#settings', { state: 'hidden' });
+      await page.click('#resume-btn');
+      await page.waitForFunction(() => document.getElementById('overlay').classList.contains('hidden'));
+      assert(!(await gameState()).paused, 'round did not resume after Settings');
     });
 
     await step(`${passName}: clear (C) removes only the player's digits`, async () => {

@@ -1,6 +1,17 @@
 'use strict';
 
-const THREE = window.THREE;
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
+import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { detectPreset, resolve, describe, SHADOW_MAP, PARTICLE_COUNT, CATEGORIES } from './gfx.js';
+import { initSettings, isSettingsOpen, openSettings } from './settings.js';
 import { generateGrid, makePuzzle } from './rules.js';
 import * as audio from './audio.js';
 import { t, getLocale } from './i18n.js';
@@ -249,6 +260,7 @@ function applyDigit(cell, digit) {
 
 const canvas = document.getElementById('scene-canvas');
 let renderer, scene, camera;
+let labelScene;           // digit sprites, drawn last and unprocessed so they stay crisp
 let cellMeshes = [];      // per-cell tile meshes (interaction layer)
 let labelSprites = [];     // digit labels
 let ringGeom, ringMat;
@@ -257,10 +269,38 @@ const spriteCache = new Map(); // digit -> shared texture
 
 const CELL_SIZE = 1.0;
 const GAP = 0.06;
+const BOARD_SPAN = SIZE * CELL_SIZE + GAP * SIZE;
 const COLOR_EMPTY = 0x2b6cb0;
 const COLOR_GIVEN = 0xc05621;
 const COLOR_PLACED = 0x2f855a;
 const COLOR_NOTE = 0x6b46c1;
+const COLOR_INVALID = 0xe53e3e;
+const RING_COLOR = new THREE.Color(0xf6e05e);
+
+// Lighting and set dressing (see §8 Graphics in spec.md)
+let hemi, keyLight, rimLight;
+let boardMesh, plinth, shadowCatcher, contactShadow, lanternGroup, aoOverlay;
+const lanternLights = [];
+const lanternFlames = [];
+let tileGeomPlain, tileGeomDetailed;
+const tileMatsPlain = [];
+const tileMatsDetailed = [];
+let fireflies = null, fireflyBase = null;
+let envTexture = null;
+const litMaterials = [];
+
+// Graphics quality state
+const GFX_KEY = 'number-sanctuary:gfx';
+let gfxSaved = {};
+let gfx = resolve({}, 'low');
+let gpuName = '';
+let detectedPreset = 'balanced';
+let composer = null, postKey = null, postFailed = false;
+let pixelRatio = 0, adaptiveScale = 1, fps = 0, lastFrameTs = 0, animTime = 0;
+let frameTimes = [];
+let viewPx = [0, 0];
+const reducedMotionMq = typeof matchMedia === 'function' ? matchMedia('(prefers-reduced-motion: reduce)') : null;
+function motionAllowed() { return !(reducedMotionMq && reducedMotionMq.matches); }
 
 function cellX(idx) { return ((idx % SIZE) - SIZE / 2 + 0.5) * CELL_SIZE; }
 function cellZ(idx) { return (Math.floor(idx / SIZE) - SIZE / 2 + 0.5) * CELL_SIZE; }
@@ -298,7 +338,7 @@ function frameCamera() {
   const sr = safeRect(w, h);
   camera.aspect = sr.w / sr.h;
   camera.setViewOffset(sr.w, sr.h, -sr.x, -sr.y, w, h);
-  const boardSpan = SIZE * CELL_SIZE + GAP * SIZE;
+  const boardSpan = BOARD_SPAN;
   const vFov = (camera.fov * Math.PI) / 180;
   const distV = (boardSpan * 0.75) / Math.tan(vFov / 2);
   const hFov = 2 * Math.atan(Math.tan(vFov / 2) * camera.aspect);
@@ -330,9 +370,7 @@ function frameCamera() {
 }
 
 function resize() {
-  const { w, h } = viewSize();
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setSize(w, h, false);
+  if (!renderer) return;
   frameCamera();
   render();
 }
@@ -342,33 +380,245 @@ function tileColor(idx) {
   return notes.has(idx) ? COLOR_NOTE : COLOR_EMPTY;
 }
 
+// Tile finish by state (detailed tiles only): clues are glazed, the player's
+// digits satin, open cells matte stone — a second cue alongside hue.
+function tileFinish(idx) {
+  if (board[idx]) return given[idx] ? 0.9 : 0.45;
+  return 0.12;
+}
+
+function setTileColor(idx, hex) {
+  tileMatsPlain[idx].color.setHex(hex);
+  tileMatsDetailed[idx].color.setHex(hex);
+}
+
+// Grey value noise, tiled, for the tiles' roughness/bump and the stone rim.
+function makeNoiseTexture(size, seed) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = size;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(size, size);
+  let s = seed >>> 0;
+  const rnd = () => { s = (s + 0x6D2B79F5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const grid = 8, lat = [];
+  for (let i = 0; i < grid * grid; i++) lat.push(rnd());
+  const at = (x, y) => lat[((y % grid) * grid) + (x % grid)];
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const gx = (x / size) * grid, gy = (y / size) * grid;
+      const x0 = Math.floor(gx), y0 = Math.floor(gy), fx = gx - x0, fy = gy - y0;
+      const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+      const top = at(x0, y0) + (at(x0 + 1, y0) - at(x0, y0)) * sx;
+      const bot = at(x0, y0 + 1) + (at(x0 + 1, y0 + 1) - at(x0, y0 + 1)) * sx;
+      const v = (top + (bot - top) * sy) * 0.7 + rnd() * 0.3;
+      const c = Math.round(110 + v * 110);
+      const o = (y * size + x) * 4;
+      img.data[o] = img.data[o + 1] = img.data[o + 2] = c; img.data[o + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  return tex;
+}
+
+// Baked contact occlusion for the static board: a black overlay whose alpha
+// darkens the grout between tiles and the plinth rim around the grid. The
+// scene never moves, so this replaces screen-space AO at no per-frame cost.
+function makeContactAoTexture(extent) {
+  const px = 512, k = px / extent;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = px;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, px, px);
+  ctx.filter = 'blur(' + Math.round(0.12 * k) + 'px)';
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  const edge = (extent - BOARD_SPAN) / 2 - 0.08;
+  ctx.fillRect(edge * k, edge * k, (BOARD_SPAN + 0.16) * k, (BOARD_SPAN + 0.16) * k);
+  ctx.filter = 'blur(' + Math.round(0.05 * k) + 'px)';
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  const t = CELL_SIZE * 1.02;
+  for (let i = 0; i < SIZE * SIZE; i++) {
+    const x = (cellX(i) + extent / 2 - t / 2) * k, y = (cellZ(i) + extent / 2 - t / 2) * k;
+    ctx.fillRect(x, y, t * k, t * k);
+  }
+  ctx.filter = 'none';
+  const tex = new THREE.CanvasTexture(cv);
+  return tex;
+}
+
+// Tile sides darken towards their base (the "high" ambient-occlusion tier).
+function addBaseShade(geom) {
+  const pos = geom.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const y = pos.getY(i); // -0.25 .. 0.25
+    const f = 0.5 + 0.5 * Math.min(1, Math.max(0, (y + 0.25) / 0.4));
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = f;
+  }
+  geom.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  return geom;
+}
+
+// Soft round glow used by fireflies and the plinth's contact shadow.
+function makeRadialTexture(inner, outer) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 64;
+  const ctx = cv.getContext('2d');
+  const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, inner); g.addColorStop(1, outer);
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(cv);
+}
+
+function readGpu() {
+  try {
+    const gl = renderer.getContext();
+    // Firefox already unmasks RENDERER and warns about the debug extension.
+    if (/firefox/i.test(navigator.userAgent)) return String(gl.getParameter(gl.RENDERER) || '');
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
+  } catch (e) { return ''; }
+}
+
+function isMobileDevice() {
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  return (coarse && (navigator.maxTouchPoints || 0) > 0) || /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent || '');
+}
+
 function initThree() {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.autoUpdate = false; // nothing that casts ever moves
   scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a2026);
+  labelScene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(45, 1, 0.1, 100);
 
-  // lighting: one dominant key + soft fill
-  const amb = new THREE.AmbientLight(0xffffff, 0.55);
-  scene.add(amb);
-  const dir = new THREE.DirectionalLight(0xffffff, 0.9);
-  dir.position.set(4, 8, 6);
-  scene.add(dir);
+  // lighting: cool dusk sky fill, one warm low key light with fitted shadows,
+  // and a faint cool rim from behind that picks out the tile edges
+  hemi = new THREE.HemisphereLight(0xb4c8ea, 0x2a2119, 1.25);
+  scene.add(hemi);
+  keyLight = new THREE.DirectionalLight(0xffe2bd, 1.8);
+  keyLight.position.set(-5, 11, 7);
+  const sh = keyLight.shadow;
+  const ext = BOARD_SPAN / 2 + 1.2;
+  Object.assign(sh.camera, { left: -ext, right: ext, top: ext, bottom: -ext, near: 4, far: 26 });
+  sh.camera.updateProjectionMatrix();
+  sh.bias = -0.0004;
+  sh.normalBias = 0.02;
+  sh.radius = 3;
+  scene.add(keyLight);
+  scene.add(keyLight.target);
+  rimLight = new THREE.DirectionalLight(0x8fb2ff, 0.55);
+  rimLight.position.set(3, 5, -9);
+  scene.add(rimLight);
 
   // board plane (stone courtyard base). The authored limestone scan multiplies
   // into the base colour; if it fails to load the flat colour is what remains.
-  const boardGeom = new THREE.PlaneGeometry(SIZE * CELL_SIZE + GAP * SIZE, SIZE * CELL_SIZE + GAP * SIZE);
+  const boardGeom = new THREE.PlaneGeometry(BOARD_SPAN, BOARD_SPAN);
   const boardMat = new THREE.MeshStandardMaterial({ color: 0x3a4750, roughness: 0.95 });
-  const boardMesh = new THREE.Mesh(boardGeom, boardMat);
+  boardMesh = new THREE.Mesh(boardGeom, boardMat);
   boardMesh.rotation.x = -Math.PI / 2;
+  boardMesh.receiveShadow = true;
   scene.add(boardMesh);
-  loadTextures(boardMat);
+  litMaterials.push(boardMat);
 
-  // cell tiles (inset number tiles)
-  const tileGeom = new THREE.BoxGeometry(CELL_SIZE * 0.94, CELL_SIZE * 0.5, CELL_SIZE * 0.94);
+  // detailed: the board sits on a raised limestone plinth with a soft contact
+  // shadow beneath, and a shadow-catching ground for the key light
+  const pl = BOARD_SPAN + 0.8;
+  const plinthTop = new THREE.MeshStandardMaterial({ color: 0x55636d, roughness: 0.9, envMapIntensity: 0.3 });
+  const plinthSide = new THREE.MeshStandardMaterial({ color: 0x5a6670, roughness: 0.95, envMapIntensity: 0.3 });
+  plinth = new THREE.Mesh(new THREE.BoxGeometry(pl, 0.5, pl),
+    [plinthSide, plinthSide, plinthTop, plinthSide, plinthSide, plinthSide]);
+  plinth.position.y = -0.25;
+  plinth.receiveShadow = true;
+  plinth.castShadow = true;
+  scene.add(plinth);
+  litMaterials.push(plinthTop, plinthSide);
+  contactShadow = new THREE.Mesh(new THREE.PlaneGeometry(pl * 1.5, pl * 1.5),
+    new THREE.MeshBasicMaterial({ map: makeRadialTexture('rgba(0,0,0,0.75)', 'rgba(0,0,0,0)'), transparent: true, depthWrite: false }));
+  contactShadow.rotation.x = -Math.PI / 2;
+  contactShadow.position.y = -0.52;
+  scene.add(contactShadow);
+  shadowCatcher = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.35 }));
+  shadowCatcher.rotation.x = -Math.PI / 2;
+  shadowCatcher.position.y = -0.5;
+  shadowCatcher.receiveShadow = true;
+  scene.add(shadowCatcher);
+  litMaterials.push(shadowCatcher.material);
+  loadTextures(boardMat, plinthTop, plinthSide);
+  const aoExtent = pl + 0.4;
+  aoOverlay = new THREE.Mesh(new THREE.PlaneGeometry(aoExtent, aoExtent), new THREE.MeshBasicMaterial({
+    color: 0x000000, alphaMap: makeContactAoTexture(aoExtent), transparent: true, opacity: 0.55, depthWrite: false,
+  }));
+  aoOverlay.rotation.x = -Math.PI / 2;
+  aoOverlay.position.y = 0.004;
+  aoOverlay.renderOrder = -1;
+  scene.add(aoOverlay);
+
+  // stone lanterns at the plinth's four corners; the two far ones carry lights
+  lanternGroup = new THREE.Group();
+  const stone = new THREE.MeshStandardMaterial({ color: 0x5b646b, roughness: 0.85, envMapIntensity: 0.3 });
+  litMaterials.push(stone);
+  const postGeom = new THREE.BoxGeometry(0.26, 0.42, 0.26);
+  const capGeom = new THREE.ConeGeometry(0.26, 0.2, 4);
+  const flameGeom = new THREE.SphereGeometry(0.075, 12, 8);
+  const lc = pl / 2 - 0.2;
+  const haloMat = new THREE.SpriteMaterial({
+    map: makeRadialTexture('rgba(255,170,80,0.55)', 'rgba(255,140,40,0)'), color: 0xffffff,
+    blending: THREE.AdditiveBlending, transparent: true, depthWrite: false,
+  });
+  for (const [x, z] of [[-lc, -lc], [lc, -lc], [-lc, lc], [lc, lc]]) {
+    const post = new THREE.Mesh(postGeom, stone);
+    post.position.set(x, 0.21, z);
+    post.castShadow = true;
+    const cap = new THREE.Mesh(capGeom, stone);
+    cap.position.set(x, 0.62, z);
+    cap.rotation.y = Math.PI / 4;
+    cap.castShadow = true;
+    const flameMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff9a2e).multiplyScalar(1.8) });
+    const flame = new THREE.Mesh(flameGeom, flameMat);
+    flame.position.set(x, 0.5, z);
+    flame.userData.phase = x * 1.7 + z * 0.9;
+    lanternFlames.push(flame);
+    const halo = new THREE.Sprite(haloMat);
+    halo.position.set(x, 0.5, z);
+    halo.scale.setScalar(0.9);
+    lanternGroup.add(post, cap, flame, halo);
+    if (z < 0) {
+      const light = new THREE.PointLight(0xff9f45, 5, 7, 2);
+      light.position.set(x, 0.7, z);
+      light.userData.phase = flame.userData.phase;
+      light.userData.base = 5;
+      lanternLights.push(light);
+      lanternGroup.add(light);
+    }
+  }
+  scene.add(lanternGroup);
+
+  // cell tiles (inset number tiles): plain boxes, or rounded glazed tiles
+  tileGeomPlain = addBaseShade(new THREE.BoxGeometry(CELL_SIZE * 0.94, CELL_SIZE * 0.5, CELL_SIZE * 0.94));
+  tileGeomDetailed = addBaseShade(new RoundedBoxGeometry(CELL_SIZE * 0.94, CELL_SIZE * 0.5, CELL_SIZE * 0.94, 3, 0.07));
+  const grain = makeNoiseTexture(128, 0x5a17);
   for (let idx = 0; idx < SIZE * SIZE; idx++) {
-    const mat = new THREE.MeshStandardMaterial({ color: tileColor(idx) });
-    const m = new THREE.Mesh(tileGeom, mat);
+    const plain = new THREE.MeshStandardMaterial({ color: tileColor(idx) });
+    const detailed = new THREE.MeshPhysicalMaterial({
+      color: tileColor(idx), roughness: 0.62, metalness: 0, roughnessMap: grain, bumpMap: grain, bumpScale: 0.6,
+      clearcoat: 0.4, clearcoatRoughness: 0.28, envMapIntensity: 0.3,
+    });
+    tileMatsPlain[idx] = plain;
+    tileMatsDetailed[idx] = detailed;
+    litMaterials.push(plain, detailed);
+    const m = new THREE.Mesh(tileGeomPlain, plain);
     m.position.set(cellX(idx), 0.1, cellZ(idx));
+    m.castShadow = true;
+    m.receiveShadow = true;
     m.userData.cell = idx;
     scene.add(m);
     cellMeshes[idx] = m;
@@ -376,37 +626,71 @@ function initThree() {
     updateCellVisual(idx);
   }
 
-  // selection ring (hidden until a cell is selected)
-  ringGeom = new THREE.RingGeometry(CELL_SIZE * 0.5, CELL_SIZE * 0.62, 32);
-  ringMat = new THREE.MeshBasicMaterial({ color: 0xf6e05e, side: THREE.DoubleSide });
+  // selection ring (hidden until a cell is selected); bright enough to bloom
+  ringGeom = new THREE.RingGeometry(CELL_SIZE * 0.5, CELL_SIZE * 0.62, 48);
+  ringMat = new THREE.MeshBasicMaterial({ color: RING_COLOR.clone(), side: THREE.DoubleSide });
   selectedRing = new THREE.Mesh(ringGeom, ringMat);
   selectedRing.rotation.x = -Math.PI / 2;
   selectedRing.position.y = 0.4;
   selectedRing.visible = false;
   scene.add(selectedRing);
 
-  resize();
+  // fireflies drifting around the plinth (never over the grid itself)
+  const maxFlies = PARTICLE_COUNT.high;
+  const pos = new Float32Array(maxFlies * 3);
+  const col = new Float32Array(maxFlies * 3);
+  fireflyBase = [];
+  let fs = 0x0f1e5;
+  const frnd = () => { fs = (fs * 1103515245 + 12345) & 0x7fffffff; return fs / 0x7fffffff; };
+  for (let i = 0; i < maxFlies; i++) {
+    const a = frnd() * Math.PI * 2, r = pl / 2 + 0.6 + frnd() * 4.5;
+    fireflyBase.push({ x: Math.cos(a) * r, y: 0.3 + frnd() * 2.6, z: Math.sin(a) * r, p: frnd() * 100, s: 0.4 + frnd() * 0.8 });
+    pos[i * 3] = fireflyBase[i].x; pos[i * 3 + 1] = fireflyBase[i].y; pos[i * 3 + 2] = fireflyBase[i].z;
+    col[i * 3] = 1; col[i * 3 + 1] = 0.8; col[i * 3 + 2] = 0.45;
+  }
+  const fg = new THREE.BufferGeometry();
+  fg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  fg.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  fireflies = new THREE.Points(fg, new THREE.PointsMaterial({
+    size: 0.2, map: makeRadialTexture('rgba(255,255,255,1)', 'rgba(255,255,255,0)'), vertexColors: true,
+    color: new THREE.Color(1, 0.85, 0.55).multiplyScalar(2.2), transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  }));
+  fireflies.frustumCulled = false;
+  scene.add(fireflies);
+
+  gpuName = readGpu();
+  detectedPreset = detectPreset(gpuName, isMobileDevice());
+  applyGraphics(loadGraphics());
+  frameCamera();
 }
 
 // Optional authored art. Every load is best-effort: a failure leaves the
 // procedural look untouched and never blocks play.
-function loadTextures(boardMat) {
+function loadTextures(boardMat, plinthTop, plinthSide) {
   let loader;
   try { loader = new THREE.TextureLoader(); } catch (e) { return; }
   loader.load('./assets/courtyard-stone.webp', (tex) => {
-    if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(3, 3);
     tex.anisotropy = 4;
     boardMat.map = tex;
     boardMat.needsUpdate = true;
+    plinthTop.map = tex;
+    plinthTop.needsUpdate = true;
+    const side = tex.clone();
+    side.repeat.set(3, 0.18);
+    side.needsUpdate = true;
+    plinthSide.map = side;
+    plinthSide.needsUpdate = true;
     render();
   }, undefined, () => { /* keep the flat stone colour */ });
   loader.load('./assets/sanctuary-backdrop.webp', (tex) => {
-    if (THREE.SRGBColorSpace) tex.colorSpace = THREE.SRGBColorSpace;
+    tex.colorSpace = THREE.SRGBColorSpace;
     scene.background = tex;
     render();
-  }, undefined, () => { /* keep the transparent/clear backdrop */ });
+  }, undefined, () => { /* keep the flat backdrop colour */ });
 }
 
 function makeTextSprite(text) {
@@ -417,13 +701,19 @@ function makeTextSprite(text) {
     cv.width = size; cv.height = size;
     const ctx = cv.getContext('2d');
     ctx.clearRect(0, 0, size, size);
-    ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 96px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
+    // a soft dark halo keeps the digit legible over any tile colour
+    ctx.shadowColor = 'rgba(0,0,0,0.55)';
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 3;
+    ctx.fillStyle = '#ffffff';
     ctx.fillText(text, size / 2, size / 2);
     const tex = new THREE.CanvasTexture(cv);
-    mat = new THREE.SpriteMaterial({ map: tex });
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    mat = new THREE.SpriteMaterial({ map: tex, toneMapped: false, depthTest: false, depthWrite: false });
     spriteCache.set(text, mat);
   }
   return new THREE.Sprite(mat);
@@ -431,19 +721,21 @@ function makeTextSprite(text) {
 
 function updateCellVisual(idx) {
   const v = board[idx];
-  cellMeshes[idx].material.color.setHex(tileColor(idx));
+  setTileColor(idx, tileColor(idx));
+  const dm = tileMatsDetailed[idx];
+  dm.clearcoat = tileFinish(idx);
 
   // label: remove stale sprite, add the current digit
   const existing = labelSprites[idx];
   if (existing && existing.userData.digit !== v) {
-    scene.remove(existing);
+    labelScene.remove(existing);
     labelSprites[idx] = null;
   }
   if (v && !labelSprites[idx]) {
     const sp = makeTextSprite(String(v));
     sp.userData.digit = v;
     sp.position.set(cellX(idx), 0.55, cellZ(idx));
-    scene.add(sp);
+    labelScene.add(sp);
     labelSprites[idx] = sp;
   }
 }
@@ -454,7 +746,219 @@ function updateSelectionVisual() {
   selectedRing.position.set(cellX(selected), 0.4, cellZ(selected));
 }
 
-function render() { if (renderer) renderer.render(scene, camera); }
+// ---------------------------------------------------------------------------
+// Graphics settings: quality presets, per-effect overrides, post-processing
+// ---------------------------------------------------------------------------
+
+// Colour grade + vignette (display-space colours in, display-space out).
+const GradeShader = {
+  uniforms: { tDiffuse: { value: null }, uVignette: { value: 0.26 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `
+    uniform sampler2D tDiffuse; uniform float uVignette;
+    varying vec2 vUv;
+    void main() {
+      vec4 src = texture2D(tDiffuse, vUv);
+      vec3 c = clamp(src.rgb, 0.0, 1.0);
+      // gentle S-curve, a touch more saturation, warm highlights / cool shadows
+      vec3 s = mix(c, c * c * (3.0 - 2.0 * c), 0.22);
+      float l = dot(s, vec3(0.299, 0.587, 0.114));
+      s = mix(vec3(l), s, 1.06);
+      s *= mix(vec3(0.95, 0.98, 1.06), vec3(1.05, 1.0, 0.95), smoothstep(0.2, 0.8, l));
+      float d = length(vUv - 0.5);
+      s *= 1.0 - uVignette * smoothstep(0.35, 0.85, d);
+      gl_FragColor = vec4(s, src.a);
+    }`,
+};
+
+function loadGraphics() {
+  try {
+    const raw = localStorage.getItem(GFX_KEY);
+    const v = raw ? JSON.parse(raw) : {};
+    return v && typeof v === 'object' ? v : {};
+  } catch (e) { return {}; }
+}
+
+function applyGraphics(saved) {
+  gfxSaved = saved && typeof saved === 'object' ? saved : {};
+  try { localStorage.setItem(GFX_KEY, JSON.stringify(gfxSaved)); } catch (e) { /* storage unavailable */ }
+  const g = resolve(gfxSaved, detectedPreset);
+  gfx = g;
+
+  // shadows
+  const mapSize = SHADOW_MAP[g.shadows];
+  renderer.shadowMap.enabled = mapSize > 0;
+  keyLight.castShadow = mapSize > 0;
+  if (mapSize > 0 && keyLight.shadow.mapSize.x !== mapSize) {
+    keyLight.shadow.mapSize.set(mapSize, mapSize);
+    if (keyLight.shadow.map) { keyLight.shadow.map.dispose(); keyLight.shadow.map = null; }
+  }
+  shadowCatcher.visible = mapSize > 0;
+
+  // detail: rounded glazed tiles, plinth, lanterns
+  const detailed = g.detail === 'detailed';
+  for (let i = 0; i < cellMeshes.length; i++) {
+    cellMeshes[i].geometry = detailed ? tileGeomDetailed : tileGeomPlain;
+    cellMeshes[i].material = detailed ? tileMatsDetailed[i] : tileMatsPlain[i];
+  }
+  boardMesh.visible = !detailed;
+  plinth.visible = detailed;
+  contactShadow.visible = detailed;
+  lanternGroup.visible = detailed;
+
+  // contact occlusion: grout/rim overlay, plus darker tile bases at "high"
+  aoOverlay.visible = g.ao !== 'off';
+  for (let i = 0; i < tileMatsPlain.length; i++) {
+    tileMatsPlain[i].vertexColors = g.ao === 'high';
+    tileMatsDetailed[i].vertexColors = g.ao === 'high';
+  }
+
+  // image-based reflections
+  if (g.reflections === 'on' && !envTexture) {
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    envTexture = pmrem.fromScene(new RoomEnvironment(renderer), 0.04).texture;
+    pmrem.dispose();
+  }
+  scene.environment = g.reflections === 'on' ? envTexture : null;
+  hemi.intensity = g.reflections === 'on' ? 0.75 : 1.25;
+
+  // ambient particles
+  fireflies.visible = g.particles !== 'off';
+  fireflies.geometry.setDrawRange(0, PARTICLE_COUNT[g.particles]);
+
+  for (const m of litMaterials) m.needsUpdate = true;
+  renderer.shadowMap.needsUpdate = true;
+  adaptiveScale = 1;
+  frameTimes = [];
+  postKey = null; // rebuild the post chain on the next frame
+  postFailed = false;
+
+  const fpsEl = document.getElementById('fps-meter');
+  if (fpsEl) {
+    fpsEl.hidden = !g.showFps;
+    if (!fpsEl.textContent) fpsEl.textContent = '… fps';
+  }
+  const ds = document.body.dataset;
+  ds.gfxPreset = g.preset;
+  ds.gfxAuto = String(g.auto);
+  for (const cat of Object.keys(CATEGORIES)) ds['gfx' + cat[0].toUpperCase() + cat.slice(1)] = g[cat];
+  render();
+}
+
+/** What the Graphics panel shows: GPU, auto choice, resolved tiers, cost summary. */
+function graphicsInfo() {
+  const px = [Math.round(viewPx[0] * pixelRatio), Math.round(viewPx[1] * pixelRatio)];
+  return {
+    gpu: gpuName || t('gfx.unknownGpu'),
+    detected: detectedPreset,
+    resolved: gfx,
+    summary: describe(gfx, px, t),
+    fps: Math.round(fps),
+    postFailed,
+  };
+}
+
+function buildPost(w, h) {
+  if (composer) { composer.dispose(); composer = null; }
+  const g = gfx;
+  if (!g.post) return;
+  try {
+    const pw = Math.round(w * pixelRatio), ph = Math.round(h * pixelRatio);
+    const target = new THREE.WebGLRenderTarget(pw, ph, { type: THREE.HalfFloatType, samples: g.antialias === 'msaa' ? 4 : 0 });
+    const c = new EffectComposer(renderer, target);
+    c.setPixelRatio(pixelRatio);
+    c.setSize(w, h);
+    c.addPass(new RenderPass(scene, camera));
+    if (g.bloom === 'on') {
+      // high threshold: only the lantern flames, fireflies and the selection ring bloom
+      c.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.75, 0.55, 0.9));
+    }
+    c.addPass(new OutputPass());
+    if (g.grade === 'on') c.addPass(new ShaderPass(GradeShader));
+    if (g.antialias === 'smaa') c.addPass(new SMAAPass(pw, ph));
+    if (g.antialias === 'fxaa') {
+      const fxaa = new ShaderPass(FXAAShader);
+      fxaa.material.uniforms.resolution.value.set(1 / pw, 1 / ph);
+      c.addPass(fxaa);
+    }
+    composer = c;
+  } catch (e) {
+    // Post-processing is an enhancement: render directly and say so in the panel.
+    postFailed = true;
+    composer = null;
+  }
+}
+
+// Adaptive resolution: step the render scale down when frames are slow, back up when fast.
+function adapt(dt) {
+  frameTimes.push(dt);
+  if (frameTimes.length < 90) return;
+  const avg = frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+  frameTimes = [];
+  fps = 1000 / avg;
+  const el = document.getElementById('fps-meter');
+  if (el && !el.hidden) el.textContent = `${Math.round(fps)} fps · ${Math.round(pixelRatio * 100) / 100}×`;
+  if (!gfx.adaptive) return;
+  if (avg > 26) adaptiveScale = Math.max(0.6, adaptiveScale - 0.1);
+  else if (avg < 14 && adaptiveScale < 1) adaptiveScale = Math.min(1, adaptiveScale + 0.05);
+}
+
+// Gentle ambient motion: firefly drift, lantern flicker, a breathing ring.
+function animateScene(dt) {
+  if (!motionAllowed()) { ringMat.color.copy(RING_COLOR).multiplyScalar(1.4); return; }
+  animTime += dt / 1000;
+  const tm = animTime;
+  ringMat.color.copy(RING_COLOR).multiplyScalar(1.3 + 0.3 * Math.sin(tm * 2.4));
+  if (lanternGroup.visible) {
+    for (const f of lanternFlames) {
+      const k = 0.85 + 0.15 * Math.sin(tm * 7.1 + f.userData.phase) * Math.sin(tm * 3.3 + f.userData.phase * 2);
+      f.scale.setScalar(k);
+    }
+    for (const l of lanternLights) {
+      l.intensity = l.userData.base * (0.85 + 0.15 * Math.sin(tm * 6.3 + l.userData.phase));
+    }
+  }
+  if (fireflies.visible) {
+    const pos = fireflies.geometry.attributes.position;
+    const col = fireflies.geometry.attributes.color;
+    const n = PARTICLE_COUNT[gfx.particles];
+    for (let i = 0; i < n; i++) {
+      const b = fireflyBase[i];
+      const ph = b.p + tm * b.s;
+      pos.array[i * 3] = b.x + Math.sin(ph * 0.7) * 0.6;
+      pos.array[i * 3 + 1] = b.y + Math.sin(ph * 1.3) * 0.25;
+      pos.array[i * 3 + 2] = b.z + Math.cos(ph * 0.5) * 0.6;
+      const glow = Math.max(0, Math.sin(ph * 1.9)) ** 2;
+      col.array[i * 3] = glow; col.array[i * 3 + 1] = 0.8 * glow; col.array[i * 3 + 2] = 0.45 * glow;
+    }
+    pos.needsUpdate = true;
+    col.needsUpdate = true;
+  }
+}
+
+function render() {
+  if (!renderer) return;
+  const { w, h } = viewSize();
+  const ratio = Math.min(3, Math.min(window.devicePixelRatio || 1, gfx.maxDpr) * gfx.scale * adaptiveScale);
+  if (w !== viewPx[0] || h !== viewPx[1] || ratio !== pixelRatio) {
+    viewPx = [w, h];
+    pixelRatio = ratio;
+    renderer.setPixelRatio(ratio);
+    renderer.setSize(w, h, false);
+  }
+  const key = gfx.post ? [gfx.bloom, gfx.grade, gfx.antialias, w, h, pixelRatio].join('|') : 'none';
+  if (key !== postKey) { postKey = key; buildPost(w, h); }
+  if (composer) {
+    try { composer.render(); } catch (e) { postFailed = true; composer.dispose(); composer = null; renderer.render(scene, camera); }
+  } else {
+    renderer.render(scene, camera);
+  }
+  // digits last, straight to the canvas: never bloomed, occluded or tone-mapped
+  renderer.setRenderTarget(null);
+  renderer.autoClear = false;
+  renderer.render(labelScene, camera);
+  renderer.autoClear = true;
+}
 
 // ---------------------------------------------------------------------------
 // DOM / UI wiring (semantic HTML over the canvas)
@@ -591,7 +1095,7 @@ function toggleNote() {
 
 let flashTimer = null;
 function flashInvalid(idx) {
-  cellMeshes[idx].material.color.setHex(0xe53e3e);
+  setTileColor(idx, COLOR_INVALID);
   render();
   if (flashTimer) clearTimeout(flashTimer);
   flashTimer = setTimeout(() => { updateCellVisual(idx); render(); }, 220);
@@ -676,9 +1180,12 @@ function setPaused(next) {
     pausedAt = Date.now();
     audio.playPause();
     showOverlay(`<h2>${t('overlay.paused')}</h2><p class="hint-line">${t('overlay.pausedHint')}</p>` +
-      `<button type="button" id="resume-btn" class="action-btn">${t('btn.resume')}</button>`, 'paused');
+      `<div class="overlay-actions"><button type="button" id="resume-btn" class="action-btn">${t('btn.resume')}</button>` +
+      `<button type="button" id="pause-settings-btn" class="action-btn" aria-haspopup="dialog">${t('settings.button')}</button></div>`, 'paused');
     const rb = document.getElementById('resume-btn');
     if (rb) rb.addEventListener('click', () => setPaused(false));
+    const sb = document.getElementById('pause-settings-btn');
+    if (sb) sb.addEventListener('click', () => openSettings(sb));
   } else {
     resumeIfPaused();
     audio.playResume();
@@ -734,6 +1241,7 @@ function moveSelection(dr, dc) {
 
 window.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.metaKey || e.altKey) return;
+  if (isSettingsOpen()) return; // the Settings dialog owns the keyboard while open
   const tag = (e.target && e.target.tagName) || '';
   const typingTarget = tag === 'INPUT' || tag === 'TEXTAREA';
   if (typingTarget) return;
@@ -869,6 +1377,14 @@ if (!restored) {
 }
 applyStaticStrings();
 initThree();
+// Settings dialog (Graphics section). Opening it pauses a running round.
+initSettings({
+  t,
+  getSaved: () => gfxSaved,
+  apply: (next) => applyGraphics(next),
+  info: graphicsInfo,
+  onOpen: () => { if (!paused && !gameOver) setPaused(true); },
+});
 setMuted(muted);
 if (gameOver) finishRound();
 else refresh();
@@ -877,7 +1393,12 @@ let _rafId = null;
 let _lastStatus = 0;
 function animate(ts) {
   _rafId = requestAnimationFrame(animate);
-  if (document.hidden) return;
+  if (document.hidden) { lastFrameTs = 0; return; }
+  const now = performance.now();
+  const dt = lastFrameTs ? Math.min(250, now - lastFrameTs) : 16;
+  lastFrameTs = now;
+  adapt(dt);
+  animateScene(dt);
   render();
   // clock in the HUD only needs second-level updates
   if (!paused && !gameOver && ts - _lastStatus > 500) { _lastStatus = ts; updateStatus(); }

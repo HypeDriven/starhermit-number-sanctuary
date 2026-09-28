@@ -21,8 +21,9 @@ const FILES = {
   '/rules.js': 'rules.js',
   '/audio.js': 'audio.js',
   '/i18n.js': 'i18n.js',
+  '/gfx.js': 'gfx.js',
+  '/settings.js': 'settings.js',
   '/style.css': 'style.css',
-  '/three.min.js': 'three.min.js',
   '/favicon.svg': 'favicon.svg',
   '/icon.png': 'icon.png',
   '/coverart.png': 'coverart.png',
@@ -53,13 +54,20 @@ function assetFile(p) {
   return m ? 'assets/' + m[1] : null;
 }
 
+// Vendored three.js r160 ES module build and its same-revision addons.
+function vendorFile(p) {
+  const m = /^\/vendor\/three\/((?:addons\/[a-z]+\/)?[A-Za-z0-9.]+\.js)$/.exec(p);
+  return m && !m[1].includes('..') ? 'vendor/three/' + m[1] : null;
+}
+
 const server = http.createServer((req, res) => {
   const url = req.url || '/';
   let p = url.split('?')[0];
   const sfx = sfxFile(p);
   const asset = assetFile(p);
-  if (!(p in FILES) && !sfx && !asset) { res.writeHead(404); res.end('not found'); return; }
-  const file = path.join(DIST_ROOT, sfx || asset || FILES[p]);
+  const vendor = vendorFile(p);
+  if (!(p in FILES) && !sfx && !asset && !vendor) { res.writeHead(404); res.end('not found'); return; }
+  const file = path.join(DIST_ROOT, sfx || asset || vendor || FILES[p]);
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(500); res.end('error: ' + err.message); return; }
     res.writeHead(200, { 'Content-Type': contentType(file), 'Cache-Control': 'no-cache' });
