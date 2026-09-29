@@ -751,3 +751,7 @@ stack.
    `GLTFLoader` vendored from the same r160 addons as `vendor/three/`.
 6. **In-game language picker** — the nine locales are selectable today only via `?lang=` or the
    browser's own language order; a control in the top bar is the intended surface.
+
+## Browser interference
+
+`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
