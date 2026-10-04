@@ -9,6 +9,7 @@
 <script type="importmap">
 { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
 </script>
+<script src="starhermit-sdk.js"></script>
 <script type="module" src="./main.js?v=production-qa-1"></script>
 <script src="browser-guard.js"></script>
 </head>
@@ -72,6 +73,7 @@
     </section>
 
     <div id="overlay" class="overlay hidden" role="status" aria-live="polite"></div>
+    <div id="sh-toast" class="sh-toast" role="status" aria-live="polite" hidden></div>
   </main>
 
   <div id="settings" class="settings-backdrop" hidden>
@@ -80,6 +82,12 @@
         <h2 id="settings-title" data-i18n="settings.title">Settings</h2>
         <button type="button" id="settings-close" class="action-btn" data-i18n="settings.close">Close</button>
       </div>
+      <section id="account-section" class="gfx-section account-section" aria-labelledby="account-heading" hidden>
+        <h3 id="account-heading" data-i18n="account.title">Account</h3>
+        <p id="account-hint" class="account-hint" data-i18n="account.signInHint" hidden>Sign in to sync your progress and settings.</p>
+        <button type="button" id="sh-sign-in" class="action-btn" data-i18n="account.signIn" hidden>Sign in with StarHermit</button>
+        <button type="button" id="sh-invite" class="action-btn" data-i18n="account.invite" hidden>Invite a friend</button>
+      </section>
       <section id="gfx-section" class="gfx-section" aria-labelledby="gfx-heading"></section>
     </div>
   </div>

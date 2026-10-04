@@ -27,14 +27,15 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | `main.js` | Everything stateful: game state, per-mode puzzle construction, scoring, persistence, the Three.js scene and its graphics settings (`applyGraphics`, `graphicsInfo`, post chain, adaptive resolution, ambient motion), input handling, the StarHermit hookup, and the `Game` QA surface. |
 | `gfx.js` | Pure graphics quality model (no three.js): presets, categories and tiers, `detectPreset`, `resolve`, `choosePreset`, `presetTier`, `describe`. |
 | `settings.js` | The Settings dialog's Graphics section: builds the controls, reflects saved/resolved settings, open/close, focus trap. Talks to `main.js` only through callbacks. |
-| `platform.js` | StarHermit adapter: launch-token read/strip, Bearer on every call, 45-min token refresh, profile nickname, and the zip+base64 cloud save (remote-preferred load, 2 s debounce, pagehide flush). Inert — no network, no UI — without a token. |
+| `platform.js` | StarHermit adapter over `starhermit-sdk.js`: profile nickname, `game:<slug>` cloud save (remote-preferred load, 2 s debounce, pagehide flush), settings KV, keyboard bindings, sign-in/invite helpers. Inert — no network, no account UI — without a token. |
+| `starhermit-sdk.js` | Unmodified copy of the canonical StarHermit client (`window.StarHermit`); owns the launch token and its renewal. |
 | `rules.js` | Pure, I/O-free Sudoku engine: `generateGrid`, `countSolutions`, `makePuzzle`, `solve`, `boxIndex`. Dual-exported (ESM + `module.exports`) so `tests/rules.mjs` can import it under Node. |
 | `audio.js` | WebAudio bus, gesture unlock, sample loading/rotation, and a synth fallback per event. |
 | `i18n.js` | Nine-locale string table, locale detection, `t(key, vars)`. |
 | `style.css` | Panel/HUD layout, palette, the ≤700 px mobile reflow. |
 | `server.js` | StarHermit game script: static host for the launch bundle, `vendor/three/*`, `sfx/*`, and `assets/*`. Serves nothing else. |
 | `vendor/three/` | Three.js r160 (npm `three@0.160.1`): `three.module.js`, `LICENSE`, and the same-revision addons the game imports (`postprocessing/` EffectComposer, RenderPass, ShaderPass, OutputPass, UnrealBloomPass, SMAAPass and their deps; `shaders/` FXAA, SMAA, Copy, Output, LuminosityHighPass; `environments/RoomEnvironment.js`; `geometries/RoundedBoxGeometry.js`). Unmodified. |
-| `starhermit.txt` | Platform manifest (`name`, `launch`, `owner`, `server`, `cover`). |
+| `starhermit.txt` | Platform manifest (`name`, `launch`, `owner`, `server`, `cover`, `control.*` keyboard actions). |
 | `sfx/` | 19 authored Opus clips + `manifest.txt` (canonical), `manifest.md`, `manifest.json`. |
 | `assets/` | Authored art: `courtyard-stone.webp`, `sanctuary-backdrop.webp`. |
 | `tests/rules.mjs` | `npm test` — engine determinism, uniqueness, solving. |
@@ -564,21 +565,38 @@ locale.
   `cover=coverart.png`, per the platform's manifest convention (https://wiki.starhermit.com/).
 - `server.js` is registered as the game's server script and runs as the authoritative static host
   for the launch bundle. It binds `STARHERMIT_PORT` (or `PORT`, defaulting to 80), and serves an
-  explicit allow-list: the nine bundle files plus `sfx/*.{opus,json}` and `assets/*.{webp,png,glb}`
+  explicit allow-list: the bundle files (including `starhermit-sdk.js`) plus `sfx/*.{opus,json}` and `assets/*.{webp,png,glb}`
   matched against strict regexes. `tests/`, `tools/` and dotfiles are unreachable by construction.
 - `coverart.png` (1200×675) and `icon.png` (256×256) supply the platform's store presentation.
 
-**Used (hosted mode), and why.** When the platform launch URL carries `#game_token=<jwt>`, the
-client authenticates with the documented runtime API (`platform.js`): the token is read once and
-stripped, `sub`/`game_scope` are decoded from the payload, every REST call carries
-`Authorization: Bearer`, the token is refreshed via `POST /api/v1/games/{slug}/launch-token` every
-45 min, and the account nickname (`GET /api/v1/users/{sub}/profile`, never `/api/v1/me`, never
-usernames) is shown with a cloud-sync status in the status panel. The `{best, round}` doc mirrors
-to `GET`/`PUT /api/v1/me/cloud-saves/{slug}` as zip+base64 (remote wins on conflict); localStorage
-stays the offline cache. Leaderboards stay untouched — clients cannot submit scores — and there is
-no presence, achievements, session, or matchmaking surface: nothing about the puzzle is
-authoritative on the server, and no host or launch token is ever persisted. `server.js` itself
-still serves only static files. §17 records the ranked-leaderboard work this leaves on the table.
+**Used (hosted mode), and why.** All platform traffic goes through the shared SDK
+`starhermit-sdk.js` (unmodified canonical copy, loaded before `main.js` as `window.StarHermit`);
+`platform.js` adapts it. Without a token nothing is requested.
+- *Launch token* — `StarHermit.init()` reads `#game_token=` (library launch) or `#access_token=`
+  (direct sign-in return) once and strips it; the slug is the `game_scope` claim. The SDK renews
+  the token before expiry; if renewal is refused the player line hides, a "signed out — playing
+  locally" toast shows, Settings re-offers sign-in and play continues on localStorage.
+- *Sign-in* — Settings → Account shows **Sign in with StarHermit** on `*.starhermit.com` without a
+  token; hidden when signed in and when running locally (the section then hides entirely).
+- *Nickname* — the profile nickname (fallback `Player ` + id prefix) shows with a cloud-sync
+  status in the status panel.
+- *Cloud save* — the `{best, round}` doc mirrors to the `game:<slug>` slot (remote wins on
+  conflict, 2 s debounce, pagehide flush); localStorage stays the offline cache.
+- *Settings KV* — mute, the Graphics settings and the locale are patched to the per-player settings
+  store on change and applied at boot (the account value wins).
+- *Invite* — signed in, Settings → Account shows **Invite a friend**, which copies
+  `StarHermit.inviteLink()` to the clipboard and confirms with a toast.
+- *Controls* — keyboard input is routed by `KeyboardEvent.code` through
+  `StarHermit.loadBindings()` (platform rebinds over the `control.*` defaults in
+  `starhermit.txt`); the action buttons' key hints show the effective keys.
+
+Account strings are localized in all nine locales (`i18n.js` `account.*`).
+
+**Not used.** Leaderboards and achievements (no server script declares any, and clients cannot
+submit scores), sessions, matchmaking, friends/invite picker, chat, replays, realtime and voice —
+the game is single-player and nothing about the puzzle is authoritative on the server; no host or
+launch token is ever persisted. `server.js` serves only static files. §17 records the
+ranked-leaderboard work this leaves on the table.
 
 ---
 

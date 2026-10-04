@@ -99,11 +99,19 @@ const EN_US = {
   'gfx.sum.reflections': "reflections",
   'gfx.sum.particles': "{n} fireflies",
   'gfx.sum.noAA': "no anti-aliasing",
+  'account.title': 'Account',
+  'account.signIn': 'Sign in with StarHermit',
+  'account.signInHint': 'Sign in to sync your progress and settings.',
+  'account.invite': 'Invite a friend',
+  'account.copied': 'Invite link copied to the clipboard.',
+  'account.copyFailed': 'Could not copy the invite link.',
+  'account.signedOut': 'Signed out — playing locally.',
 };
 
 const TABLE = {
   'en-US': EN_US,
   'en-GB': {
+    'account.copyFailed': 'Couldn’t copy the invite link.',
     'gfx.cat.grade': "Colour grade",
     'gfx.postFailed': "Post-processing is unavailable on this device, so bloom, colour grade and FXAA/SMAA are skipped.",
     'info.colors': 'Orange tiles are fixed clues; green tiles are yours.',
@@ -111,6 +119,13 @@ const TABLE = {
     'btn.mark': 'Pencil (N)',
   },
   'es-ES': {
+    'account.title': 'Cuenta',
+    'account.signIn': 'Iniciar sesión con StarHermit',
+    'account.signInHint': 'Inicia sesión para sincronizar tu progreso y tus ajustes.',
+    'account.invite': 'Invitar a un amigo',
+    'account.copied': 'Enlace de invitación copiado al portapapeles.',
+    'account.copyFailed': 'No se ha podido copiar el enlace de invitación.',
+    'account.signedOut': 'Sesión cerrada: juegas en local.',
     'settings.button': "Ajustes",
     'settings.title': "Ajustes",
     'settings.close': "Cerrar",
@@ -177,6 +192,13 @@ const TABLE = {
     'overlay.again': 'Pulsa R para una ronda nueva.',
   },
   'de-DE': {
+    'account.title': 'Konto',
+    'account.signIn': 'Mit StarHermit anmelden',
+    'account.signInHint': 'Melde dich an, um Fortschritt und Einstellungen zu synchronisieren.',
+    'account.invite': 'Freund einladen',
+    'account.copied': 'Einladungslink in die Zwischenablage kopiert.',
+    'account.copyFailed': 'Einladungslink konnte nicht kopiert werden.',
+    'account.signedOut': 'Abgemeldet – du spielst lokal weiter.',
     'settings.button': "Einstellungen",
     'settings.title': "Einstellungen",
     'settings.close': "Schließen",
@@ -243,6 +265,13 @@ const TABLE = {
     'overlay.again': 'Drücke R für eine neue Runde.',
   },
   'fr-FR': {
+    'account.title': 'Compte',
+    'account.signIn': 'Se connecter avec StarHermit',
+    'account.signInHint': 'Connectez-vous pour synchroniser progression et réglages.',
+    'account.invite': 'Inviter un ami',
+    'account.copied': 'Lien d’invitation copié dans le presse-papiers.',
+    'account.copyFailed': 'Impossible de copier le lien d’invitation.',
+    'account.signedOut': 'Déconnecté — vous jouez en local.',
     'settings.button': "Réglages",
     'settings.title': "Réglages",
     'settings.close': "Fermer",
@@ -309,6 +338,13 @@ const TABLE = {
     'overlay.again': 'Appuyez sur R pour une nouvelle partie.',
   },
   'pt-BR': {
+    'account.title': 'Conta',
+    'account.signIn': 'Entrar com StarHermit',
+    'account.signInHint': 'Entre para sincronizar seu progresso e suas configurações.',
+    'account.invite': 'Convidar um amigo',
+    'account.copied': 'Link de convite copiado para a área de transferência.',
+    'account.copyFailed': 'Não foi possível copiar o link de convite.',
+    'account.signedOut': 'Sessão encerrada — jogando localmente.',
     'settings.button': "Configurações",
     'settings.title': "Configurações",
     'settings.close': "Fechar",
@@ -375,6 +411,13 @@ const TABLE = {
     'overlay.again': 'Pressione R para uma nova rodada.',
   },
   'it-IT': {
+    'account.title': 'Account',
+    'account.signIn': 'Accedi con StarHermit',
+    'account.signInHint': 'Accedi per sincronizzare progressi e impostazioni.',
+    'account.invite': 'Invita un amico',
+    'account.copied': 'Link di invito copiato negli appunti.',
+    'account.copyFailed': 'Impossibile copiare il link di invito.',
+    'account.signedOut': 'Disconnesso: giochi in locale.',
     'settings.button': "Impostazioni",
     'settings.title': "Impostazioni",
     'settings.close': "Chiudi",
@@ -444,6 +487,8 @@ const TABLE = {
 
 // Regional variants inherit from their parent and override only what differs.
 TABLE['es-419'] = Object.assign({}, TABLE['es-ES'], {
+  'account.signedOut': 'Sesión cerrada: juegas en modo local.',
+  'account.copyFailed': 'No se pudo copiar el enlace de invitación.',
   'mode.practice': 'Práctica libre',
   'btn.clear': 'Borrar todo (C)',
   'info.select': 'Toca una casilla (o usa las flechas) y luego un número.',
@@ -451,6 +496,7 @@ TABLE['es-419'] = Object.assign({}, TABLE['es-ES'], {
   'overlay.pausedHint': 'Presiona P o Continuar para seguir.',
 });
 TABLE['fr-CA'] = Object.assign({}, TABLE['fr-FR'], {
+  'account.signInHint': 'Connectez-vous pour synchroniser votre progression et vos paramètres.',
   'mode.challenge': 'Épreuve',
   'btn.hint': 'Aide (H)',
   'score.hints': 'Aides ({n})',

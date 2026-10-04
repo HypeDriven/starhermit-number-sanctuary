@@ -14,7 +14,7 @@ import { detectPreset, resolve, describe, SHADOW_MAP, PARTICLE_COUNT, CATEGORIES
 import { initSettings, isSettingsOpen, openSettings } from './settings.js';
 import { generateGrid, makePuzzle } from './rules.js';
 import * as audio from './audio.js';
-import { t, getLocale } from './i18n.js';
+import { t, getLocale, setLocale } from './i18n.js';
 import * as platform from './platform.js';
 
 // ---------------------------------------------------------------------------
@@ -27,6 +27,27 @@ const BOX = 3;
 const MODES = ['learn', 'journey', 'daily', 'practice', 'challenge'];
 const DIFFICULTIES = ['easy', 'medium', 'hard'];
 const STORE_KEY = 'number-sanctuary:v1';
+
+// Keyboard actions (KeyboardEvent.code), mirrored as control.* lines in
+// starhermit.txt; the player's platform rebinds replace these at boot.
+const KEY_DEFAULTS = {
+  digit1: ['Digit1', 'Numpad1'], digit2: ['Digit2', 'Numpad2'], digit3: ['Digit3', 'Numpad3'],
+  digit4: ['Digit4', 'Numpad4'], digit5: ['Digit5', 'Numpad5'], digit6: ['Digit6', 'Numpad6'],
+  digit7: ['Digit7', 'Numpad7'], digit8: ['Digit8', 'Numpad8'], digit9: ['Digit9', 'Numpad9'],
+  erase: ['Backspace', 'Delete', 'Digit0', 'Numpad0'],
+  up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'],
+  note: ['KeyN', 'KeyU'], hint: ['KeyH'], clear: ['KeyC'], restart: ['KeyR'], pause: ['KeyP'], mute: ['KeyM'],
+  menu: ['Escape'],
+};
+let keyBindings = structuredClone(KEY_DEFAULTS);
+function keyAction(code) {
+  for (const [a, codes] of Object.entries(keyBindings)) if (codes.includes(code)) return a;
+  return null;
+}
+function keyLabel(code) {
+  const named = { Escape: 'Esc', Backspace: '⌫', Delete: 'Del', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };
+  return named[code] || String(code || '').replace(/^Key/, '').replace(/^Digit/, '').replace(/^Numpad/, 'Num ');
+}
 
 function boxIndex(r, c) { return Math.floor(r / BOX) * BOX + Math.floor(c / BOX); }
 
@@ -986,6 +1007,19 @@ function applyStaticStrings() {
   for (const el of document.querySelectorAll('[data-i18n-aria-label]')) {
     el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel));
   }
+  reflectKeys();
+}
+
+// Action-button labels end in their key, e.g. "Hint (H)": show the effective
+// binding (platform rebinds included) in place of the authored default.
+const KEYED_BUTTONS = { note: 'note', hint: 'hint', clear: 'clear', restart: 'restart', pause: 'pause', mute: 'mute' };
+function reflectKeys() {
+  for (const [action, bind] of Object.entries(KEYED_BUTTONS)) {
+    const btn = document.querySelector(`.action-btn[data-action="${action}"]`);
+    if (!btn) continue;
+    const key = keyLabel((keyBindings[bind] || [])[0]);
+    btn.textContent = btn.textContent.replace(/\(([^)]*)\)\s*$/, key ? `(${key})` : '').trim();
+  }
 }
 
 function fmtTime(sec) {
@@ -1203,6 +1237,7 @@ function setMuted(next) {
   if (btn) {
     btn.setAttribute('aria-pressed', String(muted));
     btn.textContent = muted ? t('btn.unmute') : t('btn.mute');
+    reflectKeys();
   }
 }
 
@@ -1248,24 +1283,25 @@ window.addEventListener('keydown', (e) => {
   // let Enter/Space activate a focused button normally
   if ((e.key === 'Enter' || e.key === ' ') && tag === 'BUTTON') return;
 
-  const k = e.key.toLowerCase();
-  if (k >= '1' && k <= '9') {
-    enterDigit(parseInt(k, 10));
+  const act = keyAction(e.code);
+  if (!act) return;
+  if (act.startsWith('digit')) {
+    enterDigit(parseInt(act.slice(5), 10));
     e.preventDefault();
-  } else if (k === 'backspace' || k === 'delete' || k === '0') {
+  } else if (act === 'erase') {
     eraseCell();
     e.preventDefault();
-  } else if (k === 'arrowup' || k === 'w') { moveSelection(-1, 0); e.preventDefault(); }
-  else if (k === 'arrowdown' || k === 's') { moveSelection(1, 0); e.preventDefault(); }
-  else if (k === 'arrowleft' || k === 'a') { moveSelection(0, -1); e.preventDefault(); }
-  else if (k === 'arrowright' || k === 'd') { moveSelection(0, 1); e.preventDefault(); }
-  else if (k === 'n' || k === 'u') toggleNote();
-  else if (k === 'h') showHint();
-  else if (k === 'c') clearBoard();
-  else if (k === 'r') restartRound();
-  else if (k === 'p') togglePause();
-  else if (k === 'm') setMuted(!muted);
-  else if (k === 'escape' && !paused && !gameOver) setPaused(true);
+  } else if (act === 'up') { moveSelection(-1, 0); e.preventDefault(); }
+  else if (act === 'down') { moveSelection(1, 0); e.preventDefault(); }
+  else if (act === 'left') { moveSelection(0, -1); e.preventDefault(); }
+  else if (act === 'right') { moveSelection(0, 1); e.preventDefault(); }
+  else if (act === 'note') toggleNote();
+  else if (act === 'hint') showHint();
+  else if (act === 'clear') clearBoard();
+  else if (act === 'restart') restartRound();
+  else if (act === 'pause') togglePause();
+  else if (act === 'mute') { setMuted(!muted); pushPlatformSettings(); }
+  else if (act === 'menu' && !paused && !gameOver) setPaused(true);
 });
 
 if (padEl) {
@@ -1285,7 +1321,7 @@ for (const btn of actionBtns) {
       case 'clear': clearBoard(); break;
       case 'restart': restartRound(); break;
       case 'pause': togglePause(); break;
-      case 'mute': setMuted(!muted); break;
+      case 'mute': setMuted(!muted); pushPlatformSettings(); break;
     }
   });
 }
@@ -1333,6 +1369,43 @@ modeBtns.forEach((btn) => {
 // play makes no network calls and shows no account line
 // ---------------------------------------------------------------------------
 
+const accountSection = document.getElementById('account-section');
+const signInBtn = document.getElementById('sh-sign-in');
+const inviteBtn = document.getElementById('sh-invite');
+const accountHint = document.getElementById('account-hint');
+const shToast = document.getElementById('sh-toast');
+let _toastTimer = null;
+function showToast(msg) {
+  if (!shToast) return;
+  shToast.textContent = msg;
+  shToast.hidden = false;
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => { shToast.hidden = true; }, 3200);
+}
+// Settings → Account: sign-in only when the platform can offer it (on
+// *.starhermit.com without a token), invite only when signed in.
+function reflectAccount() {
+  const canSignIn = platform.canSignIn();
+  const canInvite = !!platform.inviteLink();
+  if (signInBtn) signInBtn.hidden = !canSignIn;
+  if (accountHint) accountHint.hidden = !canSignIn;
+  if (inviteBtn) inviteBtn.hidden = !canInvite;
+  if (accountSection) accountSection.hidden = !canSignIn && !canInvite;
+}
+if (signInBtn) signInBtn.addEventListener('click', () => platform.signIn());
+if (inviteBtn) inviteBtn.addEventListener('click', async () => {
+  const link = platform.inviteLink();
+  if (!link) return;
+  try { await navigator.clipboard.writeText(link); showToast(t('account.copied')); }
+  catch (e) { showToast(t('account.copyFailed')); }
+});
+
+// Player preferences mirrored to the platform settings KV.
+function pushPlatformSettings() {
+  platform.patchSettings({ muted, graphics: gfxSaved, locale: getLocale() });
+}
+
+let _wasSignedIn = false;
 platform.init({
   onProfile(name) {
     if (playerNameEl) playerNameEl.textContent = name;
@@ -1341,7 +1414,18 @@ platform.init({
   onSync(state) {
     if (syncStatusEl) syncStatusEl.textContent = t('sync.' + state);
   },
+  onAuth(a) {
+    if (a.signedIn === _wasSignedIn) return; // token renewals change nothing visible
+    _wasSignedIn = a.signedIn;
+    if (!a.signedIn) {
+      if (playerLineEl) playerLineEl.hidden = true;
+      showToast(t('account.signedOut'));
+    }
+    reflectAccount();
+  },
 });
+_wasSignedIn = platform.hasSession();
+reflectAccount();
 
 // ---------------------------------------------------------------------------
 // Boot: restore (cloud-preferred when hosted) or build a round, then render.
@@ -1375,16 +1459,35 @@ if (!restored) {
 } else {
   setActiveMode(mode);
 }
+// Account preferences (settings KV) win over local values when signed in.
+const platformSettings = platform.hasSession()
+  ? await Promise.race([platform.getSettings(), new Promise((r) => setTimeout(() => r(null), 1500))])
+  : null;
+if (platformSettings && typeof platformSettings.locale === 'string') setLocale(platformSettings.locale);
+keyBindings = platform.hasSession()
+  ? await Promise.race([platform.loadBindings(KEY_DEFAULTS), new Promise((r) => setTimeout(() => r(structuredClone(KEY_DEFAULTS)), 1500))])
+  : keyBindings;
 applyStaticStrings();
-initThree();
+try {
+  initThree();
+} catch (e) {
+  const msg = document.createElement('p');
+  msg.setAttribute('role', 'alert');
+  msg.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;align-items:center;justify-content:center;padding:1.5rem;text-align:center;background:#1a2026;color:#eee;font:1rem system-ui,sans-serif';
+  msg.textContent = 'Number Sanctuary needs WebGL, which is unavailable in this browser. Your settings and progress are preserved.';
+  document.body.appendChild(msg);
+  throw e;
+}
 // Settings dialog (Graphics section). Opening it pauses a running round.
 initSettings({
   t,
   getSaved: () => gfxSaved,
-  apply: (next) => applyGraphics(next),
+  apply: (next) => { applyGraphics(next); pushPlatformSettings(); },
   info: graphicsInfo,
   onOpen: () => { if (!paused && !gameOver) setPaused(true); },
 });
+if (platformSettings && platformSettings.graphics && typeof platformSettings.graphics === 'object') applyGraphics(platformSettings.graphics);
+if (platformSettings && typeof platformSettings.muted === 'boolean') muted = platformSettings.muted;
 setMuted(muted);
 if (gameOver) finishRound();
 else refresh();
