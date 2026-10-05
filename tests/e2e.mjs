@@ -266,7 +266,8 @@ async function runPass(browser, passName, viewport, hasTouch) {
       await page.click('#settings-btn');
       await page.waitForSelector('#settings:not([hidden])');
       const box = await page.locator('.settings-panel').boundingBox();
-      assert(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= viewport.width + 1 && box.y + box.height <= viewport.height + 1,
+      const vp = page.viewportSize();
+      assert(box && box.x >= 0 && box.y >= 0 && box.x + box.width <= vp.width + 1 && box.y + box.height <= vp.height + 1,
         `settings panel cut off: ${JSON.stringify(box)}`);
       assert((await gameState()).paused, 'opening Settings did not pause the round');
       const autoLabel = await page.textContent('#gfx-preset option[value="auto"]');

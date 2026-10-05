@@ -320,6 +320,11 @@ stored score. `visibilitychange → hidden` forces `paused`, which stops the clo
 **Desktop layout.** Full-bleed canvas; the status panel is absolutely positioned top-left (300 px),
 the controls panel top-right (260 px); overlays are centred with a 320 px minimum width.
 
+**Large screens.** `ui-scale.js` sets `--ui-scale` (1 up to a 1600×1000 viewport, then
+`min(w/1600, h/1000)`, capped at 2.5); the top bar, both panels, the overlay, the Settings dialog
+and the toast are CSS-`zoom`ed by it, while the full-viewport canvas stays unzoomed and
+`frameCamera` keeps the board inside the area the larger panels leave free.
+
 **Mobile portrait (≤700 px).** The top bar stacks and the five mode tabs wrap to a full-width row.
 The status panel becomes a full-width strip at the top; the cell readout and the info list are
 hidden to protect vertical space. The controls panel moves to the bottom, full width, capped at 46%
