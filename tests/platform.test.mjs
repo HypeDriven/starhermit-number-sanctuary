@@ -62,6 +62,9 @@ test('hosted: token, profile, cloud save game:<slug>, settings, controls', async
 
   P.scheduleCloudSave(JSON.stringify({ best: { easy: 10 } }));
   await P.flushCloudSave();
+  assert.deepEqual(Object.keys(srv.saves), []);    // held until the start-up load resolves
+  assert.equal(await P.loadCloud(), null);
+  await P.flushCloudSave();
   assert.deepEqual(Object.keys(srv.saves), ['game:ns-slug']);
   assert.deepEqual(await P.loadCloud(), { best: { easy: 10 } });
 

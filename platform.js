@@ -29,6 +29,7 @@ let _pendingDoc = null;   // latest save doc (JSON string) awaiting upload
 let _saveTimer = null;    // debounce handle
 let _saving = false;      // PUT in flight
 let _retryTimer = null;   // failure-retry handle
+let _cloudReady = false;  // start-up loadCloud() resolved; nothing is PUT before
 
 function scheduleCloudSave(docJson) {
   if (!signedIn()) return;
@@ -41,7 +42,9 @@ function scheduleCloudSave(docJson) {
 async function flushCloudSave() {
   if (_saveTimer) { clearTimeout(_saveTimer); _saveTimer = null; }
   const doc = _pendingDoc;
-  if (!doc || !signedIn() || _saving) return;
+  // Held until the start-up load resolves (boot may time out and save the
+  // stale local doc first); the caller then replaces it with the doc it keeps.
+  if (!doc || !signedIn() || _saving || !_cloudReady) return;
   _saving = true;
   try {
     // keepalive lets the pagehide flush survive tab teardown; saves are a few KB.
@@ -90,7 +93,8 @@ export function hasSession() { return signedIn(); }
 // Remote save doc, or null when none/404/error. The caller decides precedence.
 export async function loadCloud() {
   if (!signedIn()) return null;
-  const doc = await sdk().loadJSON();
+  let doc;
+  try { doc = await sdk().loadJSON(); } finally { _cloudReady = true; }
   return doc && typeof doc === 'object' ? doc : null;
 }
 

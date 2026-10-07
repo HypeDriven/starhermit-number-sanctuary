@@ -1435,23 +1435,26 @@ reflectAccount();
 
 setRulesSeed((Date.now() ^ 0x5EED) >>> 0);
 let cloudDoc = null;
+let cloudLate = null;     // the cloud load, when it outlives the boot timeout
 if (platform.hasSession()) {
+  const load = platform.loadCloud();
+  const TIMED_OUT = {};
   cloudDoc = await Promise.race([
-    platform.loadCloud(),
-    new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
+    load,
+    new Promise((resolve) => setTimeout(() => resolve(TIMED_OUT), 1500)),
   ]);
+  if (cloudDoc === TIMED_OUT) { cloudDoc = null; cloudLate = load; }
 }
 const saved = loadStore();
 const savedRound = saved && saved.round;
 let restored = !!(savedRound && restoreRound(savedRound));
 // Remote-preferred load: a differing remote doc wins over the local cache.
-if (cloudDoc && typeof cloudDoc === 'object') {
-  const localSnap = JSON.stringify({ best: (saved && saved.best) || {}, round: savedRound || null });
-  const cloudSnap = JSON.stringify({ best: cloudDoc.best || {}, round: cloudDoc.round || null });
-  if (cloudSnap !== localSnap) {
-    if (cloudDoc.best && typeof cloudDoc.best === 'object') best = cloudDoc.best;
-    restored = restoreRound(cloudDoc.round) || restored;
-  }
+const localSnap = JSON.stringify({ best: (saved && saved.best) || {}, round: savedRound || null });
+const cloudDiffers = (doc) => !!doc && typeof doc === 'object'
+  && JSON.stringify({ best: doc.best || {}, round: doc.round || null }) !== localSnap;
+if (cloudDiffers(cloudDoc)) {
+  if (cloudDoc.best && typeof cloudDoc.best === 'object') best = cloudDoc.best;
+  restored = restoreRound(cloudDoc.round) || restored;
 }
 if (!restored) {
   setActiveMode(mode);
@@ -1491,6 +1494,28 @@ if (platformSettings && typeof platformSettings.muted === 'boolean') muted = pla
 setMuted(muted);
 if (gameOver) finishRound();
 else refresh();
+
+// A slow cloud load is not "no save": the local doc saved above stays held in
+// platform.js until it resolves, then the remote doc still wins unless the
+// player has already changed the board; refresh() then replaces the held doc.
+if (cloudLate) {
+  const progressSig = () => JSON.stringify({ best, mode, puzzleSeed, board, notes: Array.from(notes), moves, mistakes, hints, gameOver });
+  const bootSig = progressSig();
+  cloudLate.then((doc) => {
+    if (cloudDiffers(doc) && progressSig() === bootSig) {
+      if (doc.best && typeof doc.best === 'object') best = doc.best;
+      if (restoreRound(doc.round)) {
+        setActiveMode(mode);
+        selected = -1;
+        if (paused) pausedAt = Date.now(); // restoreRound reset the clock
+        for (let i = 0; i < SIZE * SIZE; i++) updateCellVisual(i);
+        if (gameOver) { paused = false; finishRound(); return; }
+        if (!paused) hideOverlay();
+      }
+    }
+    refresh();
+  });
+}
 
 let _rafId = null;
 let _lastStatus = 0;

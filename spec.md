@@ -631,7 +631,8 @@ but fully playable game. `localStorage['number-sanctuary:lang']` holds the langu
 show_fps, <category>: tier }`; absent keys mean Auto / from preset); neither is mirrored to the cloud. In
 hosted mode the same doc is zipped (stored entry, CRC32) + base64'd into the single platform
 cloud-save slot: `PUT` is debounced ~2 s and flushed on `pagehide`/`visibilitychange`, and at boot
-a differing remote doc wins over the local cache (bounded 1.5 s probe). Without a token none of
+a differing remote doc wins over the local cache (boot waits at most 1.5 s; a slower load still
+wins when it arrives unless the board was changed meanwhile, and nothing is PUT before it resolves). Without a token none of
 this runs — localStorage alone is the whole story.
 
 **Performance budgets.** 81 tile meshes + 81 sprites + 1 plane + 1 ring ≈ 165 objects, one shared
