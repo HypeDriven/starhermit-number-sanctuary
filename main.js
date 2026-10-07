@@ -1152,9 +1152,25 @@ function finishRound() {
     `<li>${t('score.solve')} <span>${p.solveBonus}</span></li>` +
     `<li>${t('score.time', { time: fmtTime(elapsedSeconds()) })} <span>${p.timeBonus}</span></li>` +
     `<li class="total">${t('score.total')} <span>${p.total}</span></li>` +
-    `</ul><p class="hint-line">${t('overlay.again')}</p>`,
+    `</ul><p id="results-lb" class="hint-line" role="status" hidden></p>` +
+    `<p class="hint-line">${t('overlay.again')}</p>`,
     'results');
   refresh();
+  if (mode !== 'learn') postToLeaderboard(Math.max(0, p.total));
+}
+
+// Signed in only: post a solved puzzle (every mode but Learn) to the
+// `high-score` board and show the player's rank on the results overlay.
+function postToLeaderboard(total) {
+  const line = document.getElementById('results-lb');
+  if (!line || !platform.hasSession()) return;
+  line.hidden = false;
+  line.textContent = t('lb.posting');
+  platform.submitScore(total).then((r) => {
+    if (!line.isConnected) return;
+    line.textContent = !r.posted ? t('lb.notPosted')
+      : r.rank ? t('lb.rank', { rank: r.rank }) : t('lb.posted');
+  });
 }
 
 function showHint() {

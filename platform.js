@@ -9,7 +9,8 @@
 // owns it (renewal included); this adapter resolves the account nickname,
 // mirrors the localStorage save doc to the `game:<slug>` cloud slot (remote
 // wins on conflict), and exposes the settings KV, keyboard bindings and the
-// sign-in / invite helpers.
+// sign-in / invite helpers, and posts solved puzzles to the `high-score`
+// leaderboard.
 
 function sdk() {
   const w = typeof window !== 'undefined' ? window : globalThis;
@@ -85,6 +86,20 @@ export function init(hooks) {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) flushCloudSave();
   });
+}
+
+// Post a solved puzzle's score to the `high-score` board through the game's
+// score-script.js (StarHermit.submitScores) → { posted, rank }.
+export async function submitScore(total) {
+  if (!signedIn()) return { posted: false, rank: null };
+  const s = sdk();
+  const keys = await s.submitScores({ 'high-score': total });
+  if (!keys || keys.indexOf('high-score') < 0) return { posted: false, rank: null };
+  try {
+    const r = await s.leaderboard('high-score', { pageSize: 100 });
+    const me = (r.items || []).find((i) => i.userId === s.userId);
+    return { posted: true, rank: me ? me.rank : null };
+  } catch (_) { return { posted: true, rank: null }; }
 }
 
 // Cloud mirror is available (token + a resolvable slug).

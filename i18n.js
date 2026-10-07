@@ -57,6 +57,10 @@ const EN_US = {
   'score.time': 'Time bonus ({time})',
   'score.total': 'Total',
   'overlay.again': 'Press R for a new round.',
+  'lb.posting': 'Posting score to the leaderboard…',
+  'lb.rank': 'Leaderboard rank: #{rank}',
+  'lb.posted': 'Score posted to the leaderboard.',
+  'lb.notPosted': 'Score not posted to the leaderboard.',
   'settings.button': "Settings",
   'settings.title': "Settings",
   'settings.close': "Close",
@@ -190,6 +194,10 @@ const TABLE = {
     'score.hints': 'Pistas ({n})', 'score.solve': 'Bonus por resolver',
     'score.time': 'Bonus de tiempo ({time})', 'score.total': 'Total',
     'overlay.again': 'Pulsa R para una ronda nueva.',
+    'lb.posting': 'Enviando la puntuación a la clasificación…',
+    'lb.rank': 'Puesto en la clasificación: #{rank}',
+    'lb.posted': 'Puntuación enviada a la clasificación.',
+    'lb.notPosted': 'No se ha enviado la puntuación a la clasificación.',
   },
   'de-DE': {
     'account.title': 'Konto',
@@ -263,6 +271,10 @@ const TABLE = {
     'score.hints': 'Tipps ({n})', 'score.solve': 'Lösungsbonus',
     'score.time': 'Zeitbonus ({time})', 'score.total': 'Gesamt',
     'overlay.again': 'Drücke R für eine neue Runde.',
+    'lb.posting': 'Punktzahl wird an die Bestenliste gesendet …',
+    'lb.rank': 'Platz in der Bestenliste: #{rank}',
+    'lb.posted': 'Punktzahl an die Bestenliste gesendet.',
+    'lb.notPosted': 'Punktzahl nicht an die Bestenliste gesendet.',
   },
   'fr-FR': {
     'account.title': 'Compte',
@@ -336,6 +348,10 @@ const TABLE = {
     'score.hints': 'Indices ({n})', 'score.solve': 'Bonus de résolution',
     'score.time': 'Bonus de temps ({time})', 'score.total': 'Total',
     'overlay.again': 'Appuyez sur R pour une nouvelle partie.',
+    'lb.posting': 'Envoi du score au classement…',
+    'lb.rank': 'Rang au classement : #{rank}',
+    'lb.posted': 'Score envoyé au classement.',
+    'lb.notPosted': 'Score non envoyé au classement.',
   },
   'pt-BR': {
     'account.title': 'Conta',
@@ -409,6 +425,10 @@ const TABLE = {
     'score.hints': 'Dicas ({n})', 'score.solve': 'Bônus por resolver',
     'score.time': 'Bônus de tempo ({time})', 'score.total': 'Total',
     'overlay.again': 'Pressione R para uma nova rodada.',
+    'lb.posting': 'Enviando a pontuação para o ranking…',
+    'lb.rank': 'Posição no ranking: #{rank}',
+    'lb.posted': 'Pontuação enviada para o ranking.',
+    'lb.notPosted': 'A pontuação não foi enviada para o ranking.',
   },
   'it-IT': {
     'account.title': 'Account',
@@ -482,11 +502,16 @@ const TABLE = {
     'score.hints': 'Aiuti ({n})', 'score.solve': 'Bonus soluzione',
     'score.time': 'Bonus tempo ({time})', 'score.total': 'Totale',
     'overlay.again': 'Premi R per un nuovo turno.',
+    'lb.posting': 'Invio del punteggio alla classifica…',
+    'lb.rank': 'Posizione in classifica: #{rank}',
+    'lb.posted': 'Punteggio inviato alla classifica.',
+    'lb.notPosted': 'Punteggio non inviato alla classifica.',
   },
 };
 
 // Regional variants inherit from their parent and override only what differs.
 TABLE['es-419'] = Object.assign({}, TABLE['es-ES'], {
+  'lb.notPosted': 'No se envió la puntuación a la clasificación.',
   'account.signedOut': 'Sesión cerrada: juegas en modo local.',
   'account.copyFailed': 'No se pudo copiar el enlace de invitación.',
   'mode.practice': 'Práctica libre',
@@ -496,6 +521,9 @@ TABLE['es-419'] = Object.assign({}, TABLE['es-ES'], {
   'overlay.pausedHint': 'Presiona P o Continuar para seguir.',
 });
 TABLE['fr-CA'] = Object.assign({}, TABLE['fr-FR'], {
+  'lb.posting': 'Envoi du pointage au classement…',
+  'lb.posted': 'Pointage envoyé au classement.',
+  'lb.notPosted': 'Pointage non envoyé au classement.',
   'account.signInHint': 'Connectez-vous pour synchroniser votre progression et vos paramètres.',
   'mode.challenge': 'Épreuve',
   'btn.hint': 'Aide (H)',

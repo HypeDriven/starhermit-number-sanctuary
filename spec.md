@@ -33,7 +33,8 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | `audio.js` | WebAudio bus, gesture unlock, sample loading/rotation, and a synth fallback per event. |
 | `i18n.js` | Nine-locale string table, locale detection, `t(key, vars)`. |
 | `style.css` | Panel/HUD layout, palette, the ≤700 px mobile reflow. |
-| `server.js` | StarHermit game script: static host for the launch bundle, `vendor/three/*`, `sfx/*`, and `assets/*`. Serves nothing else. |
+| `score-script.js` | StarHermit platform script (`server=score-script.js`): range-checks a solved puzzle's score and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`). |
+| `server.js` | Local dev server: static host for the launch bundle, `vendor/three/*`, `sfx/*`, and `assets/*`. Serves nothing else. |
 | `vendor/three/` | Three.js r160 (npm `three@0.160.1`): `three.module.js`, `LICENSE`, and the same-revision addons the game imports (`postprocessing/` EffectComposer, RenderPass, ShaderPass, OutputPass, UnrealBloomPass, SMAAPass and their deps; `shaders/` FXAA, SMAA, Copy, Output, LuminosityHighPass; `environments/RoomEnvironment.js`; `geometries/RoundedBoxGeometry.js`). Unmodified. |
 | `starhermit.txt` | Platform manifest (`name`, `launch`, `owner`, `server`, `cover`, `control.*` keyboard actions). |
 | `sfx/` | 19 authored Opus clips + `manifest.txt` (canonical), `manifest.md`, `manifest.json`. |
@@ -566,10 +567,10 @@ locale.
 ## 12. StarHermit integration
 
 **Used.**
-- `starhermit.txt` manifest: `name=Number Sanctuary`, `launch=index.html`, `owner`, `server=server.js`,
+- `starhermit.txt` manifest: `name=Number Sanctuary`, `launch=index.html`, `owner`, `server=score-script.js`,
   `cover=coverart.png`, per the platform's manifest convention (https://wiki.starhermit.com/).
-- `server.js` is registered as the game's server script and runs as the authoritative static host
-  for the launch bundle. It binds `STARHERMIT_PORT` (or `PORT`, defaulting to 80), and serves an
+- `score-script.js` is registered as the game's platform script; it only range-checks and posts
+  scores. `server.js` is the local dev static host for the launch bundle. It binds `STARHERMIT_PORT` (or `PORT`, defaulting to 80), and serves an
   explicit allow-list: the bundle files (including `starhermit-sdk.js`) plus `sfx/*.{opus,json}` and `assets/*.{webp,png,glb}`
   matched against strict regexes. `tests/`, `tools/` and dotfiles are unreachable by construction.
 - `coverart.png` (1200×675) and `icon.png` (256×256) supply the platform's store presentation.
@@ -595,13 +596,16 @@ locale.
   `StarHermit.loadBindings()` (platform rebinds over the `control.*` defaults in
   `starhermit.txt`); the action buttons' key hints show the effective keys.
 
-Account strings are localized in all nine locales (`i18n.js` `account.*`).
+- *Leaderboard* — one board, `high-score` (integer, higher is better, 0–100,000). Every solved
+  puzzle outside Learn posts its total (floored at 0) through `StarHermit.submitScores` (a
+  practice session whose `score-script.js` posts it), and the results overlay shows
+  "Leaderboard rank: #N" (or posted / not posted). Standalone play posts nothing and shows no line.
 
-**Not used.** Leaderboards and achievements (no server script declares any, and clients cannot
-submit scores), sessions, matchmaking, friends/invite picker, chat, replays, realtime and voice —
-the game is single-player and nothing about the puzzle is authoritative on the server; no host or
-launch token is ever persisted. `server.js` serves only static files. §17 records the
-ranked-leaderboard work this leaves on the table.
+Account and leaderboard strings are localized in all nine locales (`i18n.js` `account.*`, `lb.*`).
+
+**Not used.** Achievements, matchmaking, friends/invite picker, chat, replays, realtime and voice —
+the game is single-player; the only platform session is the short practice session that posts a
+score, and no host or launch token is ever persisted.
 
 ---
 
@@ -766,14 +770,9 @@ stack.
 3. **`prefers-reduced-motion` branch for gameplay feedback** — drop the progress-bar transition and
    replace the 220 ms rejection flash with a persistent border until the next input (ambient
    graphics motion already honours it).
-4. **StarHermit leaderboards** — post `(seed, difficulty, total, elapsed)` for Daily to a platform
-   leaderboard and show the player's rank on the results overlay, with the tie-break
-   order: higher total, then fewer mistakes, then lower elapsed, then stable session id. Identity,
-   nickname display, and the cloud save are already wired (§12); clients still cannot submit
-   scores themselves, so this needs the platform-owned board and its read-only entries API.
-5. **Hero lantern model** — a TRELLIS-generated stone lantern beside the board, which needs a
+4. **Hero lantern model** — a TRELLIS-generated stone lantern beside the board, which needs a
    `GLTFLoader` vendored from the same r160 addons as `vendor/three/`.
-6. **In-game language picker** — the nine locales are selectable today only via `?lang=` or the
+5. **In-game language picker** — the nine locales are selectable today only via `?lang=` or the
    browser's own language order; a control in the top bar is the intended surface.
 
 ## Browser interference
