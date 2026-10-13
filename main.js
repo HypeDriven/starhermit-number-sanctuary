@@ -970,14 +970,14 @@ function render() {
   const key = gfx.post ? [gfx.bloom, gfx.grade, gfx.antialias, w, h, pixelRatio].join('|') : 'none';
   if (key !== postKey) { postKey = key; buildPost(w, h); }
   if (composer) {
-    try { composer.render(); } catch (e) { postFailed = true; composer.dispose(); composer = null; renderer.render(scene, camera); }
+    try { (globalThis.GameOptions ? globalThis.GameOptions.draw(composer.renderer, () => composer.render()) : composer.render()); } catch (e) { postFailed = true; composer.dispose(); composer = null; (globalThis.GameOptions ? globalThis.GameOptions.draw(renderer, () => renderer.render(scene, camera)) : renderer.render(scene, camera)); }
   } else {
-    renderer.render(scene, camera);
+    (globalThis.GameOptions ? globalThis.GameOptions.draw(renderer, () => renderer.render(scene, camera)) : renderer.render(scene, camera));
   }
   // digits last, straight to the canvas: never bloomed, occluded or tone-mapped
   renderer.setRenderTarget(null);
   renderer.autoClear = false;
-  renderer.render(labelScene, camera);
+  (globalThis.GameOptions ? globalThis.GameOptions.draw(renderer, () => renderer.render(labelScene, camera)) : renderer.render(labelScene, camera));
   renderer.autoClear = true;
 }
 

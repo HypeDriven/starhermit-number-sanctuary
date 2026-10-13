@@ -91,7 +91,7 @@ function tryPlaySample(event) {
   if (entry.status === 'failed') return false;
   if (entry.status !== 'ready') return false; // still loading: synthesis covers it
   try {
-    const src = ctx().createBufferSource();
+    const src = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(ctx().createBufferSource(), event) : ctx().createBufferSource());
     src.buffer = entry.buffer;
     src.connect(bus());
     src.start();
@@ -108,7 +108,7 @@ function beep(freq, durSec) {
   if (!_unlocked) return;
   try {
     const c = ctx();
-    const osc = c.createOscillator();
+    const osc = (globalThis.GameOptions ? globalThis.GameOptions.trackSource(c.createOscillator(), null) : c.createOscillator());
     const gain = c.createGain();
     osc.type = 'sine';
     osc.frequency.value = freq;
