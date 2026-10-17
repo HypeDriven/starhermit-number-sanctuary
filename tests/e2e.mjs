@@ -18,6 +18,7 @@ import http from 'node:http';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { stubStarHermit, launchToken } from './starhermit-e2e.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const MIME = {
@@ -62,6 +63,71 @@ const step = async (name, fn) => {
 };
 
 function assert(cond, msg) { if (!cond) throw new Error(msg); }
+const SHOT_DIR = process.env.E2E_SHOT_DIR || '/tmp';
+
+// Signed-in language flow in its own context (stubbed StarHermit API):
+// Automatic follows the account's preferred language, an explicit choice
+// re-renders the running game in place and syncs to ui.language.
+async function languagePass(browser, passName, viewport, hasTouch) {
+  const context = await browser.newContext({ viewport, hasTouch });
+  const page = await context.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => {
+    if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`console ${m.type()}: ${m.text()}`);
+  });
+  const base = `http://127.0.0.1:${server.address().port}/`;
+  try {
+    await step(`${passName}: language — Automatic follows StarHermit, explicit choice re-renders and syncs; report a problem`, async () => {
+      const calls = await stubStarHermit(page, { preferredLanguage: 'fr-CA' });
+      await page.goto(base + 'index.html#game_token=' + launchToken(), { waitUntil: 'load' });
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA', null, { timeout: 10000 });
+      await page.waitForFunction(() => /\/81/.test(document.getElementById('status-text').textContent));
+      assert((await page.locator('.mode-btn[data-mode="practice"]').innerText()).trim() === 'Entraînement', 'modes not in French');
+      await page.click('.mode-btn[data-mode="practice"]');
+      await page.click('.action-btn[data-action="pause"]');
+      await page.waitForSelector('#overlay.paused');
+      assert((await page.locator('#overlay h2').innerText()).trim() === 'En pause', 'pause overlay not in French');
+      await page.click('#pause-settings-btn');
+      await page.waitForSelector('#settings:not([hidden])');
+      const choice = page.locator('[data-game-language="choice"]');
+      await choice.scrollIntoViewIfNeeded();
+      const auto = await choice.locator('option').first().textContent();
+      assert(/^Automatique — Français \(Canada\)$/.test(auto), 'Automatic label not resolved: ' + auto);
+      await choice.selectOption('it-IT');
+      await page.waitForFunction(() => document.documentElement.lang === 'it-IT');
+      await page.waitForFunction(() => /Salvato/.test(document.querySelector('[data-game-language="status"]').textContent));
+      assert(calls.settings['ui.language']?.choice === 'it-IT', 'ui.language not saved: ' + JSON.stringify(calls.settings));
+      assert(!('locale' in calls.settings), 'language must not be mirrored into the game settings KV');
+      assert((await page.locator('#settings-title').innerText()).trim() === 'Impostazioni', 'settings title not re-rendered');
+      assert((await page.locator('#gfx-heading').innerText()).trim() === 'Grafica', 'graphics heading not re-rendered');
+      await page.getByLabel('Risoluzione adattiva', { exact: true }).waitFor();
+      assert(await page.locator('#gfx-section [data-game-options-fps]').count() >= 1 || await page.locator('#gfx-section .game-options-controls').count() >= 1, 'shared graphics options lost after relabel');
+      await page.locator('[data-game-report="title"]').scrollIntoViewIfNeeded();
+      await page.fill('[data-game-report="title"]', 'Test report');
+      await page.click('[data-game-report="send"]');
+      await page.waitForFunction(() => /Grazie/.test(document.querySelector('[data-game-report="status"]').textContent));
+      assert(calls.reports?.[0]?.kind === 'bug', 'report not posted');
+      await page.screenshot({ path: `${SHOT_DIR}/number-sanctuary-e2e-language-${passName}.png` });
+      await page.click('#settings-close');
+      assert((await page.locator('#overlay h2').innerText()).trim() === 'In pausa', 'pause overlay not re-rendered');
+      assert((await page.locator('.action-btn[data-action="hint"]').innerText()).startsWith('Aiuto'), 'controls not re-rendered');
+      await page.click('#resume-btn');
+      await page.waitForFunction(() => /^Facile · \d+\/81 · Punti/.test(document.getElementById('status-text').textContent));
+      await page.screenshot({ path: `${SHOT_DIR}/number-sanctuary-e2e-language-hud-${passName}.png` });
+      // Back to Automatic → fr-CA.
+      await page.click('#settings-btn');
+      await choice.scrollIntoViewIfNeeded();
+      await choice.selectOption('auto');
+      await page.waitForFunction(() => document.documentElement.lang === 'fr-CA');
+      assert(calls.settings['ui.language']?.choice === 'auto', 'ui.language auto not saved');
+      assert((await page.locator('#gfx-heading').innerText()).trim() === 'Graphismes', 'graphics heading not back in French');
+    });
+  } finally {
+    await context.close();
+  }
+  if (errors.length) throw new Error(`${passName} language pass had page errors:\n${errors.join('\n')}`);
+}
 
 async function runPass(browser, passName, viewport, hasTouch) {
   const context = await browser.newContext({ viewport, hasTouch });
@@ -72,7 +138,7 @@ async function runPass(browser, passName, viewport, hasTouch) {
     if ((m.type() === 'error' || m.type() === 'warning') && !browserNoise.test(m.text())) errors.push(`console ${m.type()}: ${m.text()}`);
   });
 
-  const SHOT = (stage) => `/tmp/number-sanctuary-e2e-${stage}-${passName}.png`;
+  const SHOT = (stage) => `${SHOT_DIR}/number-sanctuary-e2e-${stage}-${passName}.png`;
   const base = `http://127.0.0.1:${server.address().port}/`;
 
   // Read game state through the game's own module (read-only; allowed for
@@ -400,6 +466,8 @@ try {
 
   await runPass(browser, 'desktop', { width: 1280, height: 800 }, false);
   await runPass(browser, 'mobile', { width: 390, height: 844 }, true);
+  await languagePass(browser, 'desktop', { width: 1280, height: 800 }, false);
+  await languagePass(browser, 'mobile', { width: 390, height: 844 }, true);
 
   console.log('\nE2E PASS — Number Sanctuary playable via UI on desktop and mobile, no page errors');
 } finally {

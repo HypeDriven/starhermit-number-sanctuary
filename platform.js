@@ -7,8 +7,8 @@
 // is inert and never touches the network. When the platform hands us a token
 // (#game_token=… library launch or #access_token=… sign-in return) the SDK
 // owns it (renewal included); this adapter resolves the account nickname,
-// mirrors the localStorage save doc to the `game:<slug>` cloud slot (remote
-// wins on conflict), and exposes the settings KV, keyboard bindings and the
+// mirrors the localStorage save doc to the `game:<slug>` cloud slot (merged
+// with the cloud copy on load and on a save conflict — see mergeSaveDocs), and exposes the settings KV, keyboard bindings and the
 // sign-in / invite helpers, and posts solved puzzles to the `high-score`
 // leaderboard.
 
@@ -46,6 +46,7 @@ async function flushCloudSave() {
   // Held until the start-up load resolves (boot may time out and save the
   // stale local doc first); the caller then replaces it with the doc it keeps.
   if (!doc || !signedIn() || _saving || !_cloudReady) return;
+  if (_retryTimer) { clearTimeout(_retryTimer); _retryTimer = null; } // this attempt is the retry
   _saving = true;
   try {
     // keepalive lets the pagehide flush survive tab teardown; saves are a few KB.
@@ -67,6 +68,55 @@ async function flushCloudSave() {
 function onSync(state) { if (_hooks.onSync) _hooks.onSync(state); }
 
 // ---------------------------------------------------------------------------
+// Merge: a save made on another device is combined with this one, never
+// dropped. Best scores keep the higher value per difficulty. Rounds: for the
+// same puzzle the one further along wins (a finished round beats an unfinished
+// one, then more filled cells, ties keep local); for different puzzles the
+// local round stays, and a missing round is taken from the other side.
+// ---------------------------------------------------------------------------
+
+function filled(r) { return Array.isArray(r.board) ? r.board.filter(Boolean).length : 0; }
+
+export function mergeSaveDocs(local, remote) {
+  const l = local && typeof local === 'object' ? local : {};
+  const r = remote && typeof remote === 'object' ? remote : {};
+  const best = {};
+  for (const src of [r.best, l.best]) {
+    if (!src || typeof src !== 'object') continue;
+    for (const [k, v] of Object.entries(src)) {
+      if (typeof v === 'number' && Number.isFinite(v) && !(best[k] >= v)) best[k] = v;
+    }
+  }
+  let round = l.round || r.round || null;
+  if (l.round && r.round && l.round.mode === r.round.mode && l.round.difficulty === r.round.difficulty
+    && l.round.puzzleSeed === r.round.puzzleSeed) {
+    const lr = l.round, rr = r.round;
+    if (!!rr.gameOver !== !!lr.gameOver) round = rr.gameOver ? rr : lr;
+    else round = filled(rr) > filled(lr) ? rr : lr;
+  }
+  return { best, round };
+}
+
+// A write lost to a save made elsewhere: re-read the cloud (which clears the
+// SDK's conflict block), let the game merge it into its state, then upload the
+// merged doc against the new version.
+let _resolving = null;
+export function resolveConflict() {
+  if (_resolving || !signedIn()) return _resolving;
+  _resolving = (async () => {
+    try {
+      const remote = await sdk().loadJSON();
+      if (sdk().saveLoadFailed()) return false;
+      const merged = _hooks.onConflict ? _hooks.onConflict(remote && typeof remote === 'object' ? remote : null) : null;
+      _pendingDoc = merged || _pendingDoc;
+      if (_pendingDoc) await flushCloudSave();
+      return true;
+    } catch (e) { return false; } finally { _resolving = null; }
+  })();
+  return _resolving;
+}
+
+// ---------------------------------------------------------------------------
 // Entry point
 // ---------------------------------------------------------------------------
 
@@ -77,6 +127,7 @@ export function init(hooks) {
   _inited = true;
   s.init();
   s.on('auth', (a) => { if (_hooks.onAuth) _hooks.onAuth(a); });
+  s.on('saveconflict', () => { resolveConflict(); });
   if (!s.signedIn) return; // local play: no account, no network calls
 
   s.profile()

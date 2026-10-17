@@ -56,7 +56,11 @@ function toggle(id, labelText) {
 
 function build() {
   const t = cfg.t;
-  const sec = document.getElementById('gfx-section');
+  // Only the game's own box is rebuilt (on a language change too); the shared
+  // game-options.js controls mounted after it in #gfx-section stay put.
+  const outer = document.getElementById('gfx-section');
+  let sec = document.getElementById('gfx-own');
+  if (!sec) { sec = el('div', { id: 'gfx-own' }); outer.prepend(sec); }
   sec.textContent = '';
   sec.append(el('h3', { id: 'gfx-heading' }, t('gfx.heading')));
 
@@ -103,6 +107,15 @@ function build() {
   sec.querySelector('#gfx-fps').addEventListener('change', (e) => {
     update(Object.assign({}, cfg.getSaved(), { show_fps: e.target.checked }));
   });
+}
+
+/** Rebuild the game's own Graphics controls in the current language. */
+export function relabelSettings() {
+  if (!cfg) return;
+  const focusId = document.activeElement && root.contains(document.activeElement) ? document.activeElement.id : null;
+  build();
+  sync();
+  if (focusId && document.getElementById(focusId)) document.getElementById(focusId).focus();
 }
 
 function update(next) {

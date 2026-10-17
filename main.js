@@ -11,10 +11,10 @@ import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { detectPreset, resolve, describe, SHADOW_MAP, PARTICLE_COUNT, CATEGORIES } from './gfx.js';
-import { initSettings, isSettingsOpen, openSettings } from './settings.js';
+import { initSettings, isSettingsOpen, openSettings, relabelSettings } from './settings.js';
 import { generateGrid, makePuzzle } from './rules.js';
 import * as audio from './audio.js';
-import { t, getLocale, setLocale } from './i18n.js';
+import { t, getLocale, onLanguage } from './i18n.js';
 import * as platform from './platform.js';
 
 // ---------------------------------------------------------------------------
@@ -179,8 +179,8 @@ function loadStore() {
   } catch (e) { return null; }
 }
 
-function saveStore() {
-  const doc = {
+function buildDoc() {
+  return {
     best,
     round: {
       mode, difficulty, puzzleSeed, moves, mistakes, hints, gameOver,
@@ -188,6 +188,10 @@ function saveStore() {
       elapsed: elapsedSeconds(),
     },
   };
+}
+
+function saveStore() {
+  const doc = buildDoc();
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(doc));
   } catch (e) { /* storage unavailable or full: play continues */ }
@@ -1054,7 +1058,7 @@ function setProgress(p) {
   progressFillEl.style.width = pct + '%';
   if (progressBarEl) {
     progressBarEl.setAttribute('aria-valuenow', String(pct));
-    progressBarEl.setAttribute('aria-valuetext', pct + '% complete');
+    progressBarEl.setAttribute('aria-valuetext', t('progress.complete', { pct }));
   }
 }
 
@@ -1143,6 +1147,16 @@ function finishRound() {
   audio.playSolve();
   for (let i = 0; i < SIZE * SIZE; i++) updateCellVisual(i);
   selected = -1;
+  lbLine = null;
+  renderResults();
+  refresh();
+  if (mode !== 'learn') postToLeaderboard(Math.max(0, p.total));
+}
+
+// The results overlay (re-rendered in place when the language changes).
+let lbLine = null; // [key, vars] of the leaderboard line, once posting starts
+function renderResults() {
+  const p = scoreParts();
   showOverlay(
     `<h2>${t('overlay.complete')}</h2>` +
     `<ul class="score-list">` +
@@ -1155,8 +1169,8 @@ function finishRound() {
     `</ul><p id="results-lb" class="hint-line" role="status" hidden></p>` +
     `<p class="hint-line">${t('overlay.again')}</p>`,
     'results');
-  refresh();
-  if (mode !== 'learn') postToLeaderboard(Math.max(0, p.total));
+  const line = document.getElementById('results-lb');
+  if (line && lbLine) { line.hidden = false; line.textContent = t(lbLine[0], lbLine[1]); }
 }
 
 // Signed in only: post a solved puzzle (every mode but Learn) to the
@@ -1165,11 +1179,12 @@ function postToLeaderboard(total) {
   const line = document.getElementById('results-lb');
   if (!line || !platform.hasSession()) return;
   line.hidden = false;
+  lbLine = ['lb.posting'];
   line.textContent = t('lb.posting');
   platform.submitScore(total).then((r) => {
-    if (!line.isConnected) return;
-    line.textContent = !r.posted ? t('lb.notPosted')
-      : r.rank ? t('lb.rank', { rank: r.rank }) : t('lb.posted');
+    lbLine = !r.posted ? ['lb.notPosted'] : r.rank ? ['lb.rank', { rank: r.rank }] : ['lb.posted'];
+    const now = document.getElementById('results-lb');
+    if (now) now.textContent = t(lbLine[0], lbLine[1]);
   });
 }
 
@@ -1229,19 +1244,24 @@ function setPaused(next) {
     paused = true;
     pausedAt = Date.now();
     audio.playPause();
-    showOverlay(`<h2>${t('overlay.paused')}</h2><p class="hint-line">${t('overlay.pausedHint')}</p>` +
-      `<div class="overlay-actions"><button type="button" id="resume-btn" class="action-btn">${t('btn.resume')}</button>` +
-      `<button type="button" id="pause-settings-btn" class="action-btn" aria-haspopup="dialog">${t('settings.button')}</button></div>`, 'paused');
-    const rb = document.getElementById('resume-btn');
-    if (rb) rb.addEventListener('click', () => setPaused(false));
-    const sb = document.getElementById('pause-settings-btn');
-    if (sb) sb.addEventListener('click', () => openSettings(sb));
+    renderPaused();
   } else {
     resumeIfPaused();
     audio.playResume();
     hideOverlay();
   }
   refresh();
+}
+
+// The pause overlay (re-rendered in place when the language changes).
+function renderPaused() {
+  showOverlay(`<h2>${t('overlay.paused')}</h2><p class="hint-line">${t('overlay.pausedHint')}</p>` +
+    `<div class="overlay-actions"><button type="button" id="resume-btn" class="action-btn">${t('btn.resume')}</button>` +
+    `<button type="button" id="pause-settings-btn" class="action-btn" aria-haspopup="dialog">${t('settings.button')}</button></div>`, 'paused');
+  const rb = document.getElementById('resume-btn');
+  if (rb) rb.addEventListener('click', () => setPaused(false));
+  const sb = document.getElementById('pause-settings-btn');
+  if (sb) sb.addEventListener('click', () => openSettings(sb));
 }
 
 function togglePause() { setPaused(!paused); }
@@ -1418,17 +1438,28 @@ if (inviteBtn) inviteBtn.addEventListener('click', async () => {
 
 // Player preferences mirrored to the platform settings KV.
 function pushPlatformSettings() {
-  platform.patchSettings({ muted, graphics: gfxSaved, locale: getLocale() });
+  platform.patchSettings({ muted, graphics: gfxSaved });
 }
 
 let _wasSignedIn = false;
+let syncState = null;
 platform.init({
   onProfile(name) {
     if (playerNameEl) playerNameEl.textContent = name;
     if (playerLineEl) playerLineEl.hidden = false;
   },
   onSync(state) {
+    syncState = state;
     if (syncStatusEl) syncStatusEl.textContent = t('sync.' + state);
+  },
+  // A save from another device landed first: fold its best scores in and keep
+  // the round being played here (see platform.mergeSaveDocs).
+  onConflict(remote) {
+    const merged = platform.mergeSaveDocs(buildDoc(), remote);
+    best = merged.best;
+    saveStore();
+    updateStatus();
+    return JSON.stringify(buildDoc());
   },
   onAuth(a) {
     if (a.signedIn === _wasSignedIn) return; // token renewals change nothing visible
@@ -1464,13 +1495,16 @@ if (platform.hasSession()) {
 const saved = loadStore();
 const savedRound = saved && saved.round;
 let restored = !!(savedRound && restoreRound(savedRound));
-// Remote-preferred load: a differing remote doc wins over the local cache.
-const localSnap = JSON.stringify({ best: (saved && saved.best) || {}, round: savedRound || null });
+// The cloud doc is merged with the local cache (platform.mergeSaveDocs): best
+// scores combine, and the round further along on the same puzzle (or the only
+// round there is) is resumed.
+const localDoc = { best: (saved && saved.best) || {}, round: restored ? savedRound : null };
 const cloudDiffers = (doc) => !!doc && typeof doc === 'object'
-  && JSON.stringify({ best: doc.best || {}, round: doc.round || null }) !== localSnap;
+  && JSON.stringify(platform.mergeSaveDocs(localDoc, doc)) !== JSON.stringify(platform.mergeSaveDocs(localDoc, null));
 if (cloudDiffers(cloudDoc)) {
-  if (cloudDoc.best && typeof cloudDoc.best === 'object') best = cloudDoc.best;
-  restored = restoreRound(cloudDoc.round) || restored;
+  const merged = platform.mergeSaveDocs(localDoc, cloudDoc);
+  best = merged.best;
+  if (merged.round !== localDoc.round) restored = restoreRound(merged.round) || restored;
 }
 if (!restored) {
   setActiveMode(mode);
@@ -1482,7 +1516,6 @@ if (!restored) {
 const platformSettings = platform.hasSession()
   ? await Promise.race([platform.getSettings(), new Promise((r) => setTimeout(() => r(null), 1500))])
   : null;
-if (platformSettings && typeof platformSettings.locale === 'string') setLocale(platformSettings.locale);
 keyBindings = platform.hasSession()
   ? await Promise.race([platform.loadBindings(KEY_DEFAULTS), new Promise((r) => setTimeout(() => r(structuredClone(KEY_DEFAULTS)), 1500))])
   : keyBindings;
@@ -1493,7 +1526,7 @@ try {
   const msg = document.createElement('p');
   msg.setAttribute('role', 'alert');
   msg.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;align-items:center;justify-content:center;padding:1.5rem;text-align:center;background:#1a2026;color:#eee;font:1rem system-ui,sans-serif';
-  msg.textContent = 'Number Sanctuary needs WebGL, which is unavailable in this browser. Your settings and progress are preserved.';
+  msg.textContent = t('error.webgl');
   document.body.appendChild(msg);
   throw e;
 }
@@ -1512,15 +1545,20 @@ if (gameOver) finishRound();
 else refresh();
 
 // A slow cloud load is not "no save": the local doc saved above stays held in
-// platform.js until it resolves, then the remote doc still wins unless the
-// player has already changed the board; refresh() then replaces the held doc.
+// platform.js until it resolves, then the cloud doc is merged in: best scores
+// always, the cloud round only while the player has not touched the board yet;
+// refresh() then replaces the held doc.
 if (cloudLate) {
-  const progressSig = () => JSON.stringify({ best, mode, puzzleSeed, board, notes: Array.from(notes), moves, mistakes, hints, gameOver });
+  const progressSig = () => JSON.stringify({ mode, puzzleSeed, board, notes: Array.from(notes), moves, mistakes, hints, gameOver });
   const bootSig = progressSig();
   cloudLate.then((doc) => {
+    if (cloudDiffers(doc)) {
+      const merged = platform.mergeSaveDocs({ best, round: localDoc.round }, doc);
+      best = merged.best;
+    }
     if (cloudDiffers(doc) && progressSig() === bootSig) {
-      if (doc.best && typeof doc.best === 'object') best = doc.best;
-      if (restoreRound(doc.round)) {
+      const merged = platform.mergeSaveDocs(localDoc, doc);
+      if (merged.round !== localDoc.round && restoreRound(merged.round)) {
         setActiveMode(mode);
         selected = -1;
         if (paused) pausedAt = Date.now(); // restoreRound reset the clock
@@ -1532,6 +1570,19 @@ if (cloudLate) {
     refresh();
   });
 }
+
+// Language change (Settings → Language, or the account preference arriving):
+// re-render every string the game wrote, in place.
+onLanguage(() => {
+  applyStaticStrings();
+  setMuted(muted);
+  updateStatus();
+  setProgress(computeProgress());
+  if (gameOver) renderResults();
+  else if (paused) renderPaused();
+  if (syncState && syncStatusEl) syncStatusEl.textContent = t('sync.' + syncState);
+  relabelSettings();
+});
 
 let _rafId = null;
 let _lastStatus = 0;

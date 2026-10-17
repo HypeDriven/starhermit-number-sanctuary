@@ -12,6 +12,7 @@
 { "imports": { "three": "./vendor/three/three.module.js", "three/addons/": "./vendor/three/addons/" } }
 </script>
 <script src="starhermit-sdk.js"></script>
+<script src="sh-language.js"></script>
 <script type="module" src="./main.js?v=production-qa-1"></script>
 <script src="browser-guard.js"></script>
 </head>
@@ -90,7 +91,7 @@
         <button type="button" id="sh-sign-in" class="action-btn" data-i18n="account.signIn" hidden>Sign in with StarHermit</button>
         <button type="button" id="sh-invite" class="action-btn" data-i18n="account.invite" hidden>Invite a friend</button>
       </section>
-      <section id="gfx-section" class="gfx-section" aria-labelledby="gfx-heading"></section>
+      <section id="gfx-section" class="gfx-section" aria-labelledby="gfx-heading" data-options-graphics></section>
     </div>
   </div>
 </div>

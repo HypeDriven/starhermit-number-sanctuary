@@ -27,11 +27,11 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | `main.js` | Everything stateful: game state, per-mode puzzle construction, scoring, persistence, the Three.js scene and its graphics settings (`applyGraphics`, `graphicsInfo`, post chain, adaptive resolution, ambient motion), input handling, the StarHermit hookup, and the `Game` QA surface. |
 | `gfx.js` | Pure graphics quality model (no three.js): presets, categories and tiers, `detectPreset`, `resolve`, `choosePreset`, `presetTier`, `describe`. |
 | `settings.js` | The Settings dialog's Graphics section: builds the controls, reflects saved/resolved settings, open/close, focus trap. Talks to `main.js` only through callbacks. |
-| `platform.js` | StarHermit adapter over `starhermit-sdk.js`: profile nickname, `game:<slug>` cloud save (remote-preferred load, 2 s debounce, pagehide flush), settings KV, keyboard bindings, sign-in/invite helpers. Inert — no network, no account UI — without a token. |
+| `platform.js` | StarHermit adapter over `starhermit-sdk.js`: profile nickname, `game:<slug>` cloud save (merged with the local doc on load and on a save conflict, 2 s debounce, pagehide flush), settings KV, keyboard bindings, sign-in/invite helpers. Inert — no network, no account UI — without a token. |
 | `starhermit-sdk.js` | Unmodified copy of the canonical StarHermit client (`window.StarHermit`); owns the launch token and its renewal. |
 | `rules.js` | Pure, I/O-free Sudoku engine: `generateGrid`, `countSolutions`, `makePuzzle`, `solve`, `boxIndex`. Dual-exported (ESM + `module.exports`) so `tests/rules.mjs` can import it under Node. |
 | `audio.js` | WebAudio bus, gesture unlock, sample loading/rotation, and a synth fallback per event. |
-| `i18n.js` | Nine-locale string table, locale detection, `t(key, vars)`. |
+| `i18n.js` | Nine-locale string table, `t(key, vars)`; the locale comes from `sh-language.js` and changes fire `ns-language`. |
 | `style.css` | Panel/HUD layout, palette, the ≤700 px mobile reflow. |
 | `score-script.js` | StarHermit platform script (`server=score-script.js`): range-checks a solved puzzle's score and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`). |
 | `server.js` | Local dev server: static host for the launch bundle, `vendor/three/*`, `sfx/*`, and `assets/*`. Serves nothing else. |
@@ -514,15 +514,23 @@ Regional pairs are built by `Object.assign` from their parent (`es-419` from `es
 `fr-FR`, `en-GB` from `en-US`) and override only what genuinely differs — *Aide* vs *Indice*,
 *pencilled* vs *marked*, `tú`- vs `usted`-neutral imperatives.
 
-**Selection order.** `?lang=` query parameter (which is also persisted) → `localStorage`
-`number-sanctuary:lang` → `navigator.languages` in order → `en-US`. Matching is exact-tag first,
-then a Latin-American Spanish region list mapped to `es-419`, then any locale sharing the base
-language. `document.documentElement.lang` and `document.title` are set from the resolved locale at
-boot, and the active tag is exposed on `Game.state.locale`.
+**Selection.** Settings → Language (the shared `sh-language.js` panel) offers Automatic plus the
+nine locales. Automatic follows the StarHermit account's preferred language when signed in, then
+`navigator.languages`, then `en-US`; an explicit choice is stored per player
+(`number-sanctuary.language.<user|guest>`, migrating the old `number-sanctuary:lang` value) and, when
+signed in, synced to the account's `ui.language` setting. `?lang=` forces a locale for that page
+load (QA) and hides the picker. The language is not mirrored into the game's own settings KV.
+`document.documentElement.lang` and `document.title` follow the active locale, which is also
+exposed on `Game.state.locale`.
 
 **Application.** `applyStaticStrings()` walks `[data-i18n]` (textContent) and
-`[data-i18n-aria-label]` (aria-label) once at boot; dynamic text — the status line, cell readout,
-mute button label, and both overlays — calls `t()` at build time with `{name}` interpolation.
+`[data-i18n-aria-label]` (aria-label); dynamic text — the status line, cell readout, progress-bar
+value text, sync status, mute button label, and both overlays — calls `t()` with `{name}`
+interpolation. A language change (`ns-language` event) re-renders all of it in place without
+touching the round: the pause or results overlay (including the leaderboard line) is rebuilt, and
+the game's own Graphics controls are rebuilt inside `#gfx-own` so the shared controls mounted after
+it in `#gfx-section` stay put. `tests/i18n.test.mjs` checks that every key used in code and markup
+exists and that every locale translates every key.
 
 **Settings strings.** The Settings dialog and every Graphics label, tier, summary fragment and
 the post-processing note are localized in all nine locales (`settings.*`, `gfx.*` keys); acronyms
@@ -586,9 +594,15 @@ locale.
   token; hidden when signed in and when running locally (the section then hides entirely).
 - *Nickname* — the profile nickname (fallback `Player ` + id prefix) shows with a cloud-sync
   status in the status panel.
-- *Cloud save* — the `{best, round}` doc mirrors to the `game:<slug>` slot (remote wins on
-  conflict, 2 s debounce, pagehide flush); localStorage stays the offline cache.
-- *Settings KV* — mute, the Graphics settings and the locale are patched to the per-player settings
+- *Cloud save* — the `{best, round}` doc mirrors to the `game:<slug>` slot (2 s debounce,
+  pagehide flush, writes conditional on the version last read); localStorage stays the offline
+  cache. The cloud and local docs are merged, never one dropped (`platform.mergeSaveDocs`): best
+  scores keep the higher value per difficulty; for the same puzzle the round further along wins (a
+  finished round first, then more filled cells, ties keep local), for different puzzles the local
+  round stays, and a missing round is taken from the other side. When a save is rejected because
+  another device saved first, the game re-reads the slot, folds its best scores in, keeps the
+  round being played and uploads the merged doc.
+- *Settings KV* — mute and the Graphics settings are patched to the per-player settings
   store on change and applied at boot (the account value wins).
 - *Invite* — signed in, Settings → Account shows **Invite a friend**, which copies
   `StarHermit.inviteLink()` to the clipboard and confirms with a toast.
@@ -630,13 +644,13 @@ the same grid on any machine — which is what makes the Daily identical for eve
 lengths, rebuilds the puzzle from the seed, then re-applies only the player's digits over the
 regenerated clues — a corrupted or stale save is rejected and a fresh round is built instead. Every
 storage access is wrapped in `try/catch`, so private mode or a full quota degrades to a non-resuming
-but fully playable game. `localStorage['number-sanctuary:lang']` holds the language override and
-`localStorage['number-sanctuary:gfx']` the graphics settings (`{ preset, render_scale, adaptive,
-show_fps, <category>: tier }`; absent keys mean Auto / from preset); neither is mirrored to the cloud. In
+but fully playable game. `localStorage['number-sanctuary:gfx']` the graphics settings (`{ preset, render_scale, adaptive,
+show_fps, <category>: tier }`; absent keys mean Auto / from preset); it is not mirrored to the cloud save. In
 hosted mode the same doc is zipped (stored entry, CRC32) + base64'd into the single platform
 cloud-save slot: `PUT` is debounced ~2 s and flushed on `pagehide`/`visibilitychange`, and at boot
-a differing remote doc wins over the local cache (boot waits at most 1.5 s; a slower load still
-wins when it arrives unless the board was changed meanwhile, and nothing is PUT before it resolves). Without a token none of
+the remote doc is merged with the local cache as above (boot waits at most 1.5 s; a slower load
+still merges its best scores when it arrives, and its round only if the board was not changed
+meanwhile; nothing is PUT before it resolves). Without a token none of
 this runs — localStorage alone is the whole story.
 
 **Performance budgets.** 81 tile meshes + 81 sprites + 1 plane + 1 ring ≈ 165 objects, one shared
@@ -772,8 +786,6 @@ stack.
    graphics motion already honours it).
 4. **Hero lantern model** — a TRELLIS-generated stone lantern beside the board, which needs a
    `GLTFLoader` vendored from the same r160 addons as `vendor/three/`.
-5. **In-game language picker** — the nine locales are selectable today only via `?lang=` or the
-   browser's own language order; a control in the top bar is the intended surface.
 
 ## Browser interference
 

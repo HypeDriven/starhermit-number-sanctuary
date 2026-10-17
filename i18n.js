@@ -3,8 +3,8 @@
 // Number Sanctuary — localization table and lookup.
 //
 // en-US is the complete base; every other locale overrides the keys it needs.
-// The active locale is chosen once at boot from `?lang=`, then a stored
-// preference, then navigator.languages, falling back to en-US.
+// The active locale comes from the game's Language setting (sh-language.js);
+// `?lang=` forces one for QA. Changes fire the `ns-language` document event.
 // Strings use {name} placeholders; `t(key, vars)` substitutes them.
 
 const EN_US = {
@@ -110,6 +110,8 @@ const EN_US = {
   'account.copied': 'Invite link copied to the clipboard.',
   'account.copyFailed': 'Could not copy the invite link.',
   'account.signedOut': 'Signed out — playing locally.',
+  'progress.complete': '{pct}% complete',
+  'error.webgl': 'Number Sanctuary needs WebGL, which is unavailable in this browser. Your settings and progress are preserved.',
 };
 
 const TABLE = {
@@ -123,6 +125,11 @@ const TABLE = {
     'btn.mark': 'Pencil (N)',
   },
   'es-ES': {
+    'sync.saving': 'Guardando en la nube…',
+    'sync.synced': 'Partida en la nube sincronizada',
+    'sync.error': 'Error al sincronizar con la nube',
+    'progress.complete': '{pct} % completado',
+    'error.webgl': 'Number Sanctuary necesita WebGL, que no está disponible en este navegador. Tus ajustes y tu progreso se conservan.',
     'account.title': 'Cuenta',
     'account.signIn': 'Iniciar sesión con StarHermit',
     'account.signInHint': 'Inicia sesión para sincronizar tu progreso y tus ajustes.',
@@ -200,6 +207,11 @@ const TABLE = {
     'lb.notPosted': 'No se ha enviado la puntuación a la clasificación.',
   },
   'de-DE': {
+    'sync.saving': 'Speichere in der Cloud…',
+    'sync.synced': 'Cloud-Speicherstand synchronisiert',
+    'sync.error': 'Cloud-Synchronisierung fehlgeschlagen',
+    'progress.complete': '{pct} % abgeschlossen',
+    'error.webgl': 'Number Sanctuary benötigt WebGL, das in diesem Browser nicht verfügbar ist. Deine Einstellungen und dein Fortschritt bleiben erhalten.',
     'account.title': 'Konto',
     'account.signIn': 'Mit StarHermit anmelden',
     'account.signInHint': 'Melde dich an, um Fortschritt und Einstellungen zu synchronisieren.',
@@ -277,6 +289,11 @@ const TABLE = {
     'lb.notPosted': 'Punktzahl nicht an die Bestenliste gesendet.',
   },
   'fr-FR': {
+    'sync.saving': 'Sauvegarde dans le cloud…',
+    'sync.synced': 'Sauvegarde cloud synchronisée',
+    'sync.error': 'Échec de la synchronisation cloud',
+    'progress.complete': '{pct} % terminé',
+    'error.webgl': 'Number Sanctuary nécessite WebGL, qui n’est pas disponible dans ce navigateur. Vos paramètres et votre progression sont conservés.',
     'account.title': 'Compte',
     'account.signIn': 'Se connecter avec StarHermit',
     'account.signInHint': 'Connectez-vous pour synchroniser progression et réglages.',
@@ -354,6 +371,11 @@ const TABLE = {
     'lb.notPosted': 'Score non envoyé au classement.',
   },
   'pt-BR': {
+    'sync.saving': 'Salvando na nuvem…',
+    'sync.synced': 'Salvamento na nuvem sincronizado',
+    'sync.error': 'Falha na sincronização com a nuvem',
+    'progress.complete': '{pct}% concluído',
+    'error.webgl': 'Number Sanctuary precisa de WebGL, que não está disponível neste navegador. Suas configurações e seu progresso foram preservados.',
     'account.title': 'Conta',
     'account.signIn': 'Entrar com StarHermit',
     'account.signInHint': 'Entre para sincronizar seu progresso e suas configurações.',
@@ -431,6 +453,11 @@ const TABLE = {
     'lb.notPosted': 'A pontuação não foi enviada para o ranking.',
   },
   'it-IT': {
+    'sync.saving': 'Salvataggio nel cloud…',
+    'sync.synced': 'Salvataggio cloud sincronizzato',
+    'sync.error': 'Sincronizzazione cloud non riuscita',
+    'progress.complete': '{pct}% completato',
+    'error.webgl': 'Number Sanctuary richiede WebGL, che non è disponibile in questo browser. Le tue impostazioni e i tuoi progressi sono conservati.',
     'account.title': 'Account',
     'account.signIn': 'Accedi con StarHermit',
     'account.signInHint': 'Accedi per sincronizzare progressi e impostazioni.',
@@ -533,41 +560,33 @@ TABLE['fr-CA'] = Object.assign({}, TABLE['fr-FR'], {
 
 export const LOCALES = ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT'];
 const DEFAULT_LOCALE = 'en-US';
-const STORE_KEY = 'number-sanctuary:lang';
+const LEGACY_KEY = 'number-sanctuary:lang';
 
-// Best match for a BCP-47 tag: exact, then a same-language locale, else null.
+// Best match for a BCP-47 tag among LOCALES (sh-language.js does the work when
+// loaded; this fallback covers node tests).
 function match(tag) {
+  const SL = globalThis.StarHermitLanguage;
+  if (SL) return SL.match(tag, LOCALES);
   if (!tag) return null;
   const want = String(tag).replace('_', '-');
   const exact = LOCALES.find((l) => l.toLowerCase() === want.toLowerCase());
   if (exact) return exact;
   const lang = want.split('-')[0].toLowerCase();
-  if (lang === 'es' && /^es-(419|ar|bo|cl|co|cr|do|ec|gt|hn|mx|ni|pa|pe|pr|py|sv|us|uy|ve)$/i.test(want)) return 'es-419';
   if (lang === 'pt') return 'pt-BR';
   return LOCALES.find((l) => l.split('-')[0] === lang) || null;
-}
-
-function detect() {
-  try {
-    const q = new URLSearchParams(globalThis.location ? globalThis.location.search : '').get('lang');
-    const forced = match(q);
-    if (forced) { try { localStorage.setItem(STORE_KEY, forced); } catch (e) { /* ignore */ } return forced; }
-  } catch (e) { /* no location */ }
-  try {
-    const saved = match(localStorage.getItem(STORE_KEY));
-    if (saved) return saved;
-  } catch (e) { /* storage unavailable */ }
-  const nav = (globalThis.navigator && (navigator.languages || [navigator.language])) || [];
-  for (const tag of nav) { const m = match(tag); if (m) return m; }
-  return DEFAULT_LOCALE;
 }
 
 let _locale = DEFAULT_LOCALE;
 let _strings = EN_US;
 
+/** Switch the active table and announce it with the `ns-language` event. */
 export function setLocale(tag) {
   _locale = match(tag) || DEFAULT_LOCALE;
   _strings = Object.assign({}, EN_US, TABLE[_locale] || {});
+  if (globalThis.document && document.documentElement) {
+    document.documentElement.lang = _locale;
+    document.dispatchEvent(new CustomEvent('ns-language', { detail: { lang: _locale } }));
+  }
   return _locale;
 }
 
@@ -583,6 +602,22 @@ export function t(key, vars) {
   return s.replace(/\{(\w+)\}/g, (m, name) => (vars[name] !== undefined ? String(vars[name]) : m));
 }
 
-setLocale(detect());
+/** Run fn now and whenever the language changes. */
+export function onLanguage(fn) {
+  if (globalThis.document) document.addEventListener('ns-language', () => fn(_locale));
+}
 
-export default { t, setLocale, getLocale, LOCALES };
+// The locale comes from the game's Language setting through sh-language.js
+// (explicit choice -> StarHermit account preference -> navigator.languages ->
+// en-US); ?lang= forces one for the page load (QA) and hides the picker.
+let forced = null;
+try { forced = match(new URLSearchParams(globalThis.location ? globalThis.location.search : '').get('lang')); } catch (e) { /* no location */ }
+const SL = globalThis.StarHermitLanguage;
+export const language = SL ? SL.create({
+  game: 'number-sanctuary', supported: LOCALES, legacyKey: LEGACY_KEY, panel: !forced,
+  apply(locale) { setLocale(forced || locale); },
+}) : null;
+if (!language) setLocale(forced || DEFAULT_LOCALE);
+
+export { EN_US, TABLE };
+export default { t, setLocale, getLocale, LOCALES, onLanguage };
