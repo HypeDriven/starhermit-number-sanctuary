@@ -26,6 +26,7 @@ const FILES = {
   '/audio.js': 'audio.js',
   '/i18n.js': 'i18n.js',
   '/gfx.js': 'gfx.js',
+  '/gpu-level.js': 'gpu-level.js',
   '/settings.js': 'settings.js',
   '/style.css': 'style.css',
   '/favicon.svg': 'favicon.svg',

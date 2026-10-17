@@ -1,7 +1,7 @@
 'use strict';
 
 // Number Sanctuary — graphics quality model: presets, per-category overrides,
-// GPU detection and a cost summary. Pure (no three.js, no DOM) so the settings
+// StarHermit hardware-level detection, per-preset budgets and a cost summary. Pure (no three.js, no DOM) so the settings
 // panel, the renderer and tests/gfx.test.mjs agree on what a setting means.
 
 export const PRESETS = ['low', 'balanced', 'high', 'ultra'];
@@ -29,24 +29,72 @@ const TABLE = {
 };
 
 export const SHADOW_MAP = { off: 0, low: 1024, medium: 2048, high: 4096 };
-export const PARTICLE_COUNT = { off: 0, low: 36, high: 110 };
 
-/** Best preset for this GPU, from the unmasked renderer string when the browser exposes it. */
-export function detectPreset(gpu, mobile) {
-  const g = String(gpu || '').toLowerCase();
-  let p = 'balanced';
-  if (/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/.test(g)) p = 'low';
-  else if (/nvidia|geforce|rtx|gtx|quadro|radeon rx|radeon pro|amd radeon(?!.*graphics)|apple m\d/.test(g)) p = 'high';
-  // Phones and tablets stay at Balanced at most on Auto (battery and heat).
-  if (mobile && PRESETS.indexOf(p) > PRESETS.indexOf('balanced')) p = 'balanced';
-  return p;
+// Auto picks the preset from the StarHermit hardware level (0 = Galaxy S20 / Intel UHD or weaker, 20 = RTX
+// 5090; gpu-level.js → window.StarHermitGpu, a classic script loaded before the game): Low from 0,
+// Balanced from 4, High from 10, Ultra from 17. Phones, tablets and ≤ 4 GB machines are capped at level 9.
+export const LEVELS = { low: 0, balanced: 4, high: 10, ultra: 17 };
+const gpuApi = () => globalThis.StarHermitGpu;
+
+/** Hardware level 0–20 for an unmasked renderer string plus StarHermitGpu.detectSystem() facts. */
+export function detectLevel(gpu, system) {
+  const G = gpuApi();
+  const sys = { webgl: true, webgl2: true, ...(system || {}), gpu: String(gpu || '') };
+  if (!gpu) sys.webgl = false; // no renderer string: no usable WebGL
+  return G ? G.detectLevel(sys) : (gpu ? LEVELS.balanced : 0);
+}
+
+/** The preset Auto starts from for a hardware level. */
+export function presetForLevel(level) {
+  const G = gpuApi();
+  return G ? G.presetForLevel(level, LEVELS) : PRESETS.filter((p) => LEVELS[p] <= level).pop() || 'low';
+}
+
+/** Best preset for this GPU (the hardware level already caps phones/tablets at Balanced). */
+export function detectPreset(gpu, system) {
+  return presetForLevel(detectLevel(gpu, system));
+}
+
+/*
+ * Per-preset asset and effect budget. Each preset holds 60 FPS on the weakest GPU Auto gives it (Low →
+ * level 0, Balanced → 4, High → 10, Ultra → 17; measured with tests/gfx-bench.mjs). The grid, digits,
+ * colours, hit areas and rules are identical on every preset — only visuals change.
+ *   material      tile shading: lambert (Low) / standard satin tiles whose roughness carries the
+ *                 clue / player / open finish (Balanced) / physical clear-coated glaze (High, Ultra)
+ *   label         digit sprite texture size in px
+ *   lanternLights point lights in the far lanterns (Detail on; flames and halos always glow)
+ *   fireflies     fireflies at Particles "high" (low: a third), scaled with the level
+ *   bloomRes      bloom resolution as a fraction of the frame
+ */
+export const BUDGETS = {
+  low: { material: 'lambert', label: 128, lanternLights: 0, fireflies: 50, bloomRes: 0.5 },
+  balanced: { material: 'standard', label: 128, lanternLights: 0, fireflies: 80, bloomRes: 0.5 },
+  high: { material: 'physical', label: 128, lanternLights: 2, fireflies: 110, bloomRes: 0.5 },
+  ultra: { material: 'physical', label: 256, lanternLights: 2, fireflies: 160, bloomRes: 1 },
+};
+export const FIREFLY_MAX = 320;
+const PARTICLE_SHARE = { off: 0, low: 1 / 3, high: 1 };
+
+/** A preset's concrete budget for a hardware level (the firefly count scales ≤ 2× within the preset). */
+export function budgetFor(preset, level) {
+  const b = { ...(BUDGETS[preset] || BUDGETS.balanced) };
+  const G = gpuApi(), floor = LEVELS[preset] || 0;
+  const lv = Math.max(Number.isFinite(level) ? level : floor, floor);
+  const k = G ? Math.min(2, G.scaleBudget(1, lv, floor)) : 1;
+  b.fireflies = Math.min(FIREFLY_MAX, Math.round(b.fireflies * k));
+  return b;
+}
+
+/** Fireflies drawn for a resolved setting (Particles tier share of the preset's budget). */
+export function fireflyCount(r) {
+  return Math.round(r.budget.fireflies * (PARTICLE_SHARE[r.particles] ?? 0));
 }
 
 /**
  * Resolve saved settings into concrete tiers.
  * `saved`: { preset: 'auto'|preset, render_scale, adaptive, show_fps, <category>: 'preset'|tier }.
  */
-export function resolve(saved, detected) {
+export function resolve(saved, detected, level) {
   const s = saved || {};
   const auto = !PRESETS.includes(s.preset);
   const preset = auto ? (PRESETS.includes(detected) ? detected : 'balanced') : s.preset;
@@ -60,6 +108,8 @@ export function resolve(saved, detected) {
   for (const [cat, tiers] of Object.entries(CATEGORIES)) {
     out[cat] = tiers.includes(s[cat]) ? s[cat] : row[cat];
   }
+  out.level = Number.isFinite(level) ? level : LEVELS[preset];
+  out.budget = budgetFor(preset, out.level);
   out.adaptive = s.adaptive !== false;
   out.showFps = !!s.show_fps;
   // Post-processing runs only when something needs it; otherwise the canvas MSAA is used.
@@ -103,7 +153,7 @@ export function describe(r, pixels, tr) {
     r.ao === 'off' ? null : r.ao === 'high' ? t('gfx.sum.aoHigh') : t('gfx.sum.ao'),
     r.bloom === 'on' ? t('gfx.sum.bloom') : null,
     r.reflections === 'on' ? t('gfx.sum.reflections') : null,
-    r.particles === 'off' ? null : t('gfx.sum.particles', { n: PARTICLE_COUNT[r.particles] }),
+    r.particles === 'off' ? null : t('gfx.sum.particles', { n: r.budget ? fireflyCount(r) : 0 }),
     r.antialias === 'off' ? t('gfx.sum.noAA') : r.antialias.toUpperCase(),
     pixels ? `${pixels[0]}×${pixels[1]} px` : null,
   ];

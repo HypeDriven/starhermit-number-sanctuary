@@ -25,7 +25,8 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 |---|---|
 | `index.html` | Static DOM: top bar (title, frame-rate readout, Settings button), mode tablist, status panel, number pad, action row, overlay host, Settings dialog shell; the import map for `three` / `three/addons/`. All translatable nodes carry `data-i18n` / `data-i18n-aria-label`. |
 | `main.js` | Everything stateful: game state, per-mode puzzle construction, scoring, persistence, the Three.js scene and its graphics settings (`applyGraphics`, `graphicsInfo`, post chain, adaptive resolution, ambient motion), input handling, the StarHermit hookup, and the `Game` QA surface. |
-| `gfx.js` | Pure graphics quality model (no three.js): presets, categories and tiers, `detectPreset`, `resolve`, `choosePreset`, `presetTier`, `describe`. |
+| `gpu-level.js` | Shared StarHermit hardware-level module (`window.StarHermitGpu`, loaded before `main.js`), copied from the platform tools, never edited here. |
+| `gfx.js` | Pure graphics quality model (no three.js): presets, categories and tiers, hardware-level detection (`detectLevel`, `presetForLevel`, `detectPreset`), per-preset `BUDGETS`/`budgetFor`/`fireflyCount`, `resolve`, `choosePreset`, `presetTier`, `describe`. |
 | `settings.js` | The Settings dialog's Graphics section: builds the controls, reflects saved/resolved settings, open/close, focus trap. Talks to `main.js` only through callbacks. |
 | `platform.js` | StarHermit adapter over `starhermit-sdk.js`: profile nickname, `game:<slug>` cloud save (merged with the local doc on load and on a save conflict, 2 s debounce, pagehide flush), settings KV, keyboard bindings, sign-in/invite helpers. Inert — no network, no account UI — without a token. |
 | `starhermit-sdk.js` | Unmodified copy of the canonical StarHermit client (`window.StarHermit`); owns the launch token and its renewal. |
@@ -405,23 +406,23 @@ occlusion baked into a grout/rim overlay under the tiles (On), plus tiles darken
 base (High) — the board never moves, so this costs nothing per frame; bloom limited to emissive
 highlights (threshold 0.9: selection ring, lantern flames, fireflies); a colour grade (gentle
 S-curve, slight saturation, warm highlights / cool shadows) with vignette; FXAA, SMAA or MSAA;
-image-based reflections from a PMREM-filtered `RoomEnvironment`; fireflies (36 or 110); and
+image-based reflections from a PMREM-filtered `RoomEnvironment`; fireflies (a third or all of the preset's firefly budget); and
 **Detail** — Plain is the original boxes on a flat stone plane, Detailed is rounded tiles with a
-clearcoat finish by state (clues glazed, the player's digits satin, open cells matte) and procedural
+clearcoat finish by state (clues glazed, the player's digits satin, open cells matte; on Balanced the
+same cue is carried by roughness instead of a clear coat) and procedural
 grain in roughness and bump, a raised limestone plinth with a soft contact shadow, and four stone
-lanterns whose far pair casts warm flickering light. Post-processing (EffectComposer: RenderPass →
+lanterns whose far pair casts warm flickering light (High/Ultra; on Balanced the flames and halos glow
+without point lights). Post-processing (EffectComposer: RenderPass →
 UnrealBloom → OutputPass → grade → SMAA/FXAA) runs only when bloom, grade, FXAA or SMAA is on;
 otherwise the scene renders straight to the canvas with its own MSAA.
 
 The Settings dialog's **Graphics** section offers a quality preset — Auto (the default, shown as
-"Auto (detected: <tier>)"; chosen from the WebGL unmasked renderer string: software renderers get
-Low, discrete GPUs and Apple M-series get High, everything else Balanced, and touch/mobile devices
-are capped at Balanced), Low, Balanced, High, Ultra — a render scale slider (50–200% of the
+"Auto (detected: <tier>)"; chosen from the StarHermit hardware level below), Low, Balanced, High, Ultra — a render scale slider (50–200% of the
 preset's), one select per effect (Shadows, Ambient occlusion, Bloom, Colour grade, Anti-aliasing,
 Reflections, Fireflies, Detail; "From preset (<tier>)" by default), Adaptive resolution (on by
 default: every 90 frames, an average over 26 ms steps the resolution down 10% to a 60% floor and
 under 14 ms steps it back up 5%) and Show frame rate (a readout in the top bar), plus a summary
-line "GPU name · cost summary · W×H px". Choosing a preset clears the per-effect overrides.
+line "GPU name · Level N · cost summary · W×H px" ("Level" localized). Choosing a preset clears the per-effect overrides.
 Changes apply immediately without a reload and persist in `localStorage['number-sanctuary:gfx']`.
 Pixel ratio is min(devicePixelRatio, preset cap) × preset scale × render scale × adaptive scale,
 with caps Low 1, Balanced 1.5, High/Ultra 2 (Ultra also renders at 125%), so Low never draws more
@@ -432,9 +433,42 @@ fails to render, the game renders without it and the panel says so. The body car
 | Preset | Shadows | AO | Bloom | Grade | AA | Reflections | Fireflies | Detail | DPR cap |
 |---|---|---|---|---|---|---|---|---|---|
 | Low | off | off | off | off | MSAA | off | off | plain | 1 |
-| Balanced | 1024² | on | on | on | FXAA | on | 36 | detailed | 1.5 |
-| High | 2048² | on | on | on | SMAA | on | 110 | detailed | 2 |
-| Ultra | 4096² | high | on | on | MSAA | on | 110 | detailed | 2 (×1.25) |
+| Balanced | 1024² | on | on | on | FXAA | on | low (27) | detailed | 1.5 |
+| High | 2048² | on | on | on | SMAA | on | high (110) | detailed | 2 |
+| Ultra | 4096² | high | on | on | MSAA | on | high (160) | detailed | 2 (×1.25) |
+
+**Hardware-level detection.** `gpu-level.js` (shared StarHermit copy, `window.StarHermitGpu`, also in
+`server.js`'s file table) rates the WebGL unmasked renderer plus device facts (`detectSystem()`:
+phone/tablet, cores, memory, screen) on the StarHermit hardware level 0–20 (0 = Galaxy S20 / Intel UHD
+or weaker, every software renderer and no WebGL; 20 = RTX 5090; each level ≈ 1.23×; laptop parts two
+levels below desktop; phones, tablets and ≤ 4 GB machines capped at 9). `gfx.js` maps it with
+`presetForLevel(level, { low: 0, balanced: 4, high: 10, ultra: 17 })`, so Auto picks Ultra on strong
+GPUs; adaptive resolution still steps down when slow. Headless SwiftShader is level 0 → Low. Phones and
+tablets pace Auto FPS at half the display refresh rate ("Auto (half refresh rate)") and start at 16
+simultaneous sounds (shared `game-options.js`).
+
+**Per-preset budgets** (`BUDGETS` / `budgetFor` in `gfx.js`). Each preset holds 60 FPS on the weakest
+GPU Auto gives it — Low at level 0, Balanced 4, High 10, Ultra 17. The grid, digits, colours, hit areas
+and rules are identical on every preset; only visuals change. Firefly counts are tuned at the floor
+level (the table above) and scale up within the preset on faster GPUs (`StarHermitGpu.scaleBudget`,
+≤ 2×, at most 320).
+
+| Budget | Low | Balanced | High | Ultra |
+|---|---|---|---|---|
+| Tile shading | Lambert (plain tiles) | Standard satin (finish via roughness) | Physical clear-coated glaze | as High |
+| Digit sprite texture | 128 px | 128 px | 128 px | 256 px |
+| Lantern point lights (Detail on) | 0 | 0 | 2 | 2 |
+| Fireflies at Fireflies high | 50 | 80 | 110 | 160 |
+| Bloom resolution | ½ | ½ | ½ | full |
+
+**Benchmark** (`node tools/gfx-bench.mjs number-sanctuary`; hook `tests/gfx-bench.mjs` picks the preset
+in Settings → Graphics, switches to Practice and keeps solving by tapping open cells on the 3D board and
+typing their digits, restarting with R when solved). Measured 2026-10-17 (GPU ms above the draws-skipped
+floor, projected to the preset's floor level; CPU p90 on the RTX 5090 run):
+
+- Desktop 1920×1080: PASS low (typical 0.00 / slow 1.98 ms GPU, CPU 0.90 ms); PASS balanced (3.52 / 1.47,
+  CPU 1.50); PASS high (1.25 / 1.18, CPU 1.60); PASS ultra (1.29 / 1.89, CPU 1.50).
+- Mobile 390×844 @3×: PASS low (0.00 / 0.00, CPU 1.00); PASS balanced (2.03 / 0.00, CPU 1.50).
 
 ### The hero
 
@@ -680,8 +714,10 @@ target, the puzzle still has exactly one solution, and `solve()` returns the ori
 a grid with a duplicated digit, an empty array, and an all-10s array each yield `countSolutions = 0`
 and `solve = null`.
 
-**`npm test` → `tests/gfx.test.mjs`** (`node --test`) asserts `detectPreset` on sample GPU strings
-(SwiftShader/llvmpipe → Low, GeForce/Apple M → High, Intel → Balanced, mobile capped at Balanced),
+**`npm test` → `tests/gfx.test.mjs`** (`node --test`) asserts hardware level → preset
+(SwiftShader/llvmpipe/no WebGL, AMD Radeon Graphics and Intel UHD → Low, Iris Xe → Balanced, GTX 1070 →
+High, RTX 4080/5090 → Ultra, phones such as Adreno 740 capped at Balanced), the per-preset budget table
+(explicit, non-decreasing, floor-level tuned, scaling with the level),
 `resolve()` for Auto, explicit presets, per-effect overrides, invalid values and the 50–200%
 render-scale clamp, that choosing a preset clears overrides while keeping scale and toggles, and
 the `describe()` summary.
@@ -695,7 +731,7 @@ mark; `H` fills one correct cell and counts a hint; `P` opens the overlay, the R
 it, and mute toggles via both button and `M`; arrows move the selection to the expected indices; a
 reload restores mode, seed and board; `C` removes only player digits and resets counters; `R`
 produces a different seed with reset counters; and through the visible Settings button the Graphics
-section fits the viewport, pauses the round, shows "Auto (detected: Low)" under SwiftShader, applies
+section fits the viewport, pauses the round, shows "Auto (detected: Low)" under SwiftShader and "Level 0" in the summary, applies
 Low then High (checked via `data-gfx-*` on `<body>` and the summary line), a Bloom override, the
 render-scale slider and the frame-rate toggle live, keeps them across a reload, clears overrides
 when Ultra is chosen, and returns to Auto. Any console error **or warning** fails a pass. Desktop additionally solves all 81 cells through the

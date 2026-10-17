@@ -10,7 +10,7 @@ import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { FXAAShader } from 'three/addons/shaders/FXAAShader.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { detectPreset, resolve, describe, SHADOW_MAP, PARTICLE_COUNT, CATEGORIES } from './gfx.js';
+import { detectLevel, presetForLevel, resolve, describe, fireflyCount, SHADOW_MAP, FIREFLY_MAX, CATEGORIES } from './gfx.js';
 import { initSettings, isSettingsOpen, openSettings, relabelSettings } from './settings.js';
 import { generateGrid, makePuzzle } from './rules.js';
 import * as audio from './audio.js';
@@ -310,6 +310,8 @@ const lanternFlames = [];
 let tileGeomPlain, tileGeomDetailed;
 const tileMatsPlain = [];
 const tileMatsDetailed = [];
+const tileMatsLambert = [];   // Low: plain tiles
+const tileMatsSatin = [];     // Balanced: detailed tiles without the clear-coat lobe
 let fireflies = null, fireflyBase = null;
 let envTexture = null;
 const litMaterials = [];
@@ -320,6 +322,8 @@ let gfxSaved = {};
 let gfx = resolve({}, 'low');
 let gpuName = '';
 let detectedPreset = 'balanced';
+let gpuLevel = 0;
+let labelSize = 128;
 let composer = null, postKey = null, postFailed = false;
 let pixelRatio = 0, adaptiveScale = 1, fps = 0, lastFrameTs = 0, animTime = 0;
 let frameTimes = [];
@@ -412,9 +416,17 @@ function tileFinish(idx) {
   return 0.12;
 }
 
+// Tile material per detail and the preset's shading budget (Lambert / Standard satin / Physical glaze).
+function tileMaterial(i, detailed, tier) {
+  if (!detailed) return tier === 'lambert' ? tileMatsLambert[i] : tileMatsPlain[i];
+  return tier === 'physical' ? tileMatsDetailed[i] : tileMatsSatin[i];
+}
+
 function setTileColor(idx, hex) {
   tileMatsPlain[idx].color.setHex(hex);
   tileMatsDetailed[idx].color.setHex(hex);
+  tileMatsLambert[idx].color.setHex(hex);
+  tileMatsSatin[idx].color.setHex(hex);
 }
 
 // Grey value noise, tiled, for the tiles' roughness/bump and the stone rim.
@@ -639,7 +651,9 @@ function initThree() {
     });
     tileMatsPlain[idx] = plain;
     tileMatsDetailed[idx] = detailed;
-    litMaterials.push(plain, detailed);
+    tileMatsLambert[idx] = new THREE.MeshLambertMaterial({ color: tileColor(idx) });
+    tileMatsSatin[idx] = new THREE.MeshStandardMaterial({ color: tileColor(idx), roughness: 0.62, metalness: 0, roughnessMap: grain, envMapIntensity: 0.3 });
+    litMaterials.push(plain, detailed, tileMatsLambert[idx], tileMatsSatin[idx]);
     const m = new THREE.Mesh(tileGeomPlain, plain);
     m.position.set(cellX(idx), 0.1, cellZ(idx));
     m.castShadow = true;
@@ -661,7 +675,7 @@ function initThree() {
   scene.add(selectedRing);
 
   // fireflies drifting around the plinth (never over the grid itself)
-  const maxFlies = PARTICLE_COUNT.high;
+  const maxFlies = FIREFLY_MAX; // built at the largest budget; the preset draws fireflyCount() of them
   const pos = new Float32Array(maxFlies * 3);
   const col = new Float32Array(maxFlies * 3);
   fireflyBase = [];
@@ -685,7 +699,14 @@ function initThree() {
   scene.add(fireflies);
 
   gpuName = readGpu();
-  detectedPreset = detectPreset(gpuName, isMobileDevice());
+  // StarHermit hardware level (gpu-level.js): renderer string + device facts (phone/tablet, cores, memory).
+  let sys = { mobile: isMobileDevice(), webgl2: renderer.capabilities.isWebGL2 };
+  try {
+    const G = globalThis.StarHermitGpu;
+    if (G) { const d = G.detectSystem(); sys = { ...sys, mobile: sys.mobile || d.mobile, touch: d.touch, screen: d.screen, cores: d.cores, memoryGb: d.memoryGb, astc: d.astc }; }
+  } catch (e) { /* defaults */ }
+  gpuLevel = detectLevel(gpuName, sys);
+  detectedPreset = presetForLevel(gpuLevel);
   applyGraphics(loadGraphics());
   frameCamera();
 }
@@ -719,13 +740,14 @@ function loadTextures(boardMat, plinthTop, plinthSide) {
 }
 
 function makeTextSprite(text) {
-  let mat = spriteCache.get(text);
+  const size = gfx.budget ? gfx.budget.label : 128; // the preset's digit-texture budget
+  let mat = spriteCache.get(text + '@' + size);
   if (!mat) {
-    const size = 128;
     const cv = document.createElement('canvas');
     cv.width = size; cv.height = size;
     const ctx = cv.getContext('2d');
     ctx.clearRect(0, 0, size, size);
+    ctx.scale(size / 128, size / 128);
     ctx.font = 'bold 96px Arial';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -734,12 +756,12 @@ function makeTextSprite(text) {
     ctx.shadowBlur = 8;
     ctx.shadowOffsetY = 3;
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(text, size / 2, size / 2);
+    ctx.fillText(text, 64, 64);
     const tex = new THREE.CanvasTexture(cv);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.anisotropy = 4;
     mat = new THREE.SpriteMaterial({ map: tex, toneMapped: false, depthTest: false, depthWrite: false });
-    spriteCache.set(text, mat);
+    spriteCache.set(text + '@' + size, mat);
   }
   return new THREE.Sprite(mat);
 }
@@ -749,6 +771,7 @@ function updateCellVisual(idx) {
   setTileColor(idx, tileColor(idx));
   const dm = tileMatsDetailed[idx];
   dm.clearcoat = tileFinish(idx);
+  tileMatsSatin[idx].roughness = 0.78 - 0.45 * tileFinish(idx); // the same finish cue without a clear coat
 
   // label: remove stale sprite, add the current digit
   const existing = labelSprites[idx];
@@ -807,8 +830,9 @@ function loadGraphics() {
 function applyGraphics(saved) {
   gfxSaved = saved && typeof saved === 'object' ? saved : {};
   try { localStorage.setItem(GFX_KEY, JSON.stringify(gfxSaved)); } catch (e) { /* storage unavailable */ }
-  const g = resolve(gfxSaved, detectedPreset);
+  const g = resolve(gfxSaved, detectedPreset, gpuLevel);
   gfx = g;
+  const b = g.budget;
 
   // shadows
   const mapSize = SHADOW_MAP[g.shadows];
@@ -824,18 +848,29 @@ function applyGraphics(saved) {
   const detailed = g.detail === 'detailed';
   for (let i = 0; i < cellMeshes.length; i++) {
     cellMeshes[i].geometry = detailed ? tileGeomDetailed : tileGeomPlain;
-    cellMeshes[i].material = detailed ? tileMatsDetailed[i] : tileMatsPlain[i];
+    cellMeshes[i].material = tileMaterial(i, detailed, b.material);
   }
   boardMesh.visible = !detailed;
   plinth.visible = detailed;
   contactShadow.visible = detailed;
   lanternGroup.visible = detailed;
+  lanternLights.forEach((l, i) => { l.visible = i < b.lanternLights; });
+  // digit sprites follow the label-texture budget: rebuild them when it changes
+  if (labelSize !== b.label) {
+    labelSize = b.label;
+    for (let i = 0; i < labelSprites.length; i++) {
+      if (labelSprites[i]) { labelScene.remove(labelSprites[i]); labelSprites[i] = null; }
+      if (cellMeshes[i]) updateCellVisual(i);
+    }
+  }
 
   // contact occlusion: grout/rim overlay, plus darker tile bases at "high"
   aoOverlay.visible = g.ao !== 'off';
   for (let i = 0; i < tileMatsPlain.length; i++) {
     tileMatsPlain[i].vertexColors = g.ao === 'high';
     tileMatsDetailed[i].vertexColors = g.ao === 'high';
+    tileMatsLambert[i].vertexColors = g.ao === 'high';
+    tileMatsSatin[i].vertexColors = g.ao === 'high';
   }
 
   // image-based reflections
@@ -849,7 +884,7 @@ function applyGraphics(saved) {
 
   // ambient particles
   fireflies.visible = g.particles !== 'off';
-  fireflies.geometry.setDrawRange(0, PARTICLE_COUNT[g.particles]);
+  fireflies.geometry.setDrawRange(0, fireflyCount(g));
 
   for (const m of litMaterials) m.needsUpdate = true;
   renderer.shadowMap.needsUpdate = true;
@@ -875,12 +910,22 @@ function graphicsInfo() {
   const px = [Math.round(viewPx[0] * pixelRatio), Math.round(viewPx[1] * pixelRatio)];
   return {
     gpu: gpuName || t('gfx.unknownGpu'),
+    level: gpuLevel,
     detected: detectedPreset,
     resolved: gfx,
     summary: describe(gfx, px, t),
     fps: Math.round(fps),
     postFailed,
   };
+}
+
+// Run a post pass at a fraction of the frame: EffectComposer.addPass/setSize hand every pass the full
+// frame size, so the pass's own setSize applies the budget's scale (half-res bloom below Ultra).
+function atScale(pass, k) {
+  if (!(k < 1)) return pass;
+  const setSize = pass.setSize.bind(pass);
+  pass.setSize = (w, h) => setSize(Math.max(1, Math.round(w * k)), Math.max(1, Math.round(h * k)));
+  return pass;
 }
 
 function buildPost(w, h) {
@@ -896,7 +941,7 @@ function buildPost(w, h) {
     c.addPass(new RenderPass(scene, camera));
     if (g.bloom === 'on') {
       // high threshold: only the lantern flames, fireflies and the selection ring bloom
-      c.addPass(new UnrealBloomPass(new THREE.Vector2(w, h), 0.75, 0.55, 0.9));
+      c.addPass(atScale(new UnrealBloomPass(new THREE.Vector2(w, h), 0.75, 0.55, 0.9), g.budget.bloomRes));
     }
     c.addPass(new OutputPass());
     if (g.grade === 'on') c.addPass(new ShaderPass(GradeShader));
@@ -946,7 +991,7 @@ function animateScene(dt) {
   if (fireflies.visible) {
     const pos = fireflies.geometry.attributes.position;
     const col = fireflies.geometry.attributes.color;
-    const n = PARTICLE_COUNT[gfx.particles];
+    const n = fireflyCount(gfx);
     for (let i = 0; i < n; i++) {
       const b = fireflyBase[i];
       const ph = b.p + tm * b.s;

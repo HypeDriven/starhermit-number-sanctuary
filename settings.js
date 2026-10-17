@@ -148,12 +148,12 @@ function sync() {
 function syncSummary() {
   if (!cfg || !root) return;
   const info = cfg.info();
-  root.querySelector('#gfx-summary').textContent = `${info.gpu} · ${info.summary}`;
+  root.querySelector('#gfx-summary').textContent = [info.gpu, info.level != null ? cfg.t('gfx.level', { n: info.level }) : null, info.summary].filter(Boolean).join(' · ');
   root.querySelector('#gfx-post-note').hidden = !info.postFailed;
 }
 
 /**
- * cfg: { t, getSaved(), apply(saved), info() -> { gpu, detected, resolved, summary, postFailed }, onOpen() }
+ * cfg: { t, getSaved(), apply(saved), info() -> { gpu, level, detected, resolved, summary, postFailed }, onOpen() }
  */
 export function initSettings(options) {
   cfg = options;

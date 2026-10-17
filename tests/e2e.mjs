@@ -340,6 +340,7 @@ async function runPass(browser, passName, viewport, hasTouch) {
       assert(/^Auto \(detected: Low\)$/.test(autoLabel), `unexpected Auto label: ${autoLabel}`);
       assert(await body('preset') === 'low' && await body('auto') === 'true', 'software GPU should resolve Auto to Low');
       assert(/SwiftShader|llvmpipe/i.test(await summary()), `summary lacks the GPU name: ${await summary()}`);
+      assert(/ · Level 0 · /.test(await summary()), `summary lacks the hardware level: ${await summary()}`);
       await page.screenshot({ path: SHOT('settings') });
 
       await page.selectOption('#gfx-preset', 'low');
