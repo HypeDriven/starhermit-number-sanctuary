@@ -13,95 +13,69 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | | |
 |---|---|
 | Genre | Single-player constraint/deduction puzzle (Sudoku ruleset) |
-| Players | 1, offline; scores compared only against the player's own local bests |
+| Players | 1; personal bests per difficulty, and a high-score leaderboard for signed-in players |
 | Session length | 4–20 min per grid (Easy ≈ 4–8 min, Hard ≈ 12–25 min); resumable, so a session can be one cell long |
-| Platforms | Desktop and mobile browsers; portrait and landscape |
-| Rendering | Three.js (r160 ES modules) WebGL board on `#scene-canvas`, with all controls and readouts as real DOM over it; Graphics quality presets from Low to Ultra |
-| Persistence | `localStorage` offline cache; with a StarHermit launch token the same doc also mirrors to the platform cloud-save slot |
+| Platforms | StarHermit engine script game: natively in the StarHermit client, in browsers through the engine's web runtime; desktop and phones, portrait and landscape |
+| Engine | StarHermit engine 1.19.1, host API minor 20 (`starhermit.txt`: `engine.version=1.19.1`, `engine.minor=20`, capabilities `platform, storage, clipboard`) |
+| Rendering | `starhermit:scene` (three.js r185-parity scene graph) for the courtyard; `starhermit:ui` for the top bar, panels, overlays and dialog; `starhermit:draw` for the board digits |
+| Persistence | The engine's `saves` store (device + the player's cloud slot); the Mute choice in the engine's game `settings` |
 
 ### File map
 
 | Path | Owns |
 |---|---|
-| `index.html` | Static DOM: top bar (title, frame-rate readout, Settings button), mode tablist, status panel, number pad, action row, overlay host, Settings dialog shell; the import map for `three` / `three/addons/`. All translatable nodes carry `data-i18n` / `data-i18n-aria-label`. |
-| `main.js` | Everything stateful: game state, per-mode puzzle construction, scoring, persistence, the Three.js scene and its graphics settings (`applyGraphics`, `graphicsInfo`, post chain, adaptive resolution, ambient motion), input handling, the StarHermit hookup, and the `Game` QA surface. |
-| `gpu-level.js` | Shared StarHermit hardware-level module (`window.StarHermitGpu`, loaded before `main.js`), copied from the platform tools, never edited here. |
-| `gfx.js` | Pure graphics quality model (no three.js): presets, categories and tiers, hardware-level detection (`detectLevel`, `presetForLevel`, `detectPreset`), per-preset `BUDGETS`/`budgetFor`/`fireflyCount`, `resolve`, `choosePreset`, `presetTier`, `describe`. |
-| `settings.js` | The Settings dialog's Graphics section: builds the controls, reflects saved/resolved settings, open/close, focus trap. Talks to `main.js` only through callbacks. |
-| `platform.js` | StarHermit adapter over `starhermit-sdk.js`: profile nickname, `game:<slug>` cloud save (merged with the local doc on load and on a save conflict, 2 s debounce, pagehide flush), settings KV, keyboard bindings, sign-in/invite helpers. Inert — no network, no account UI — without a token. |
-| `starhermit-sdk.js` | Unmodified copy of the canonical StarHermit client (`window.StarHermit`); owns the launch token and its renewal. |
-| `rules.js` | Pure, I/O-free Sudoku engine: `generateGrid`, `countSolutions`, `makePuzzle`, `solve`, `boxIndex`. Dual-exported (ESM + `module.exports`) so `tests/rules.mjs` can import it under Node. |
-| `audio.js` | WebAudio bus, gesture unlock, sample loading/rotation, and a synth fallback per event. |
-| `i18n.js` | Nine-locale string table, `t(key, vars)`; the locale comes from `sh-language.js` and changes fire `ns-language`. |
-| `style.css` | Panel/HUD layout, palette, the ≤700 px mobile reflow. |
-| `score-script.js` | StarHermit platform script (`server=score-script.js`): range-checks a solved puzzle's score and posts it to the `high-score` leaderboard (canonical copy in the games repo's `tools/score-script.js`). |
-| `server.js` | Local dev server: static host for the launch bundle, `vendor/three/*`, `sfx/*`, and `assets/*`. Serves nothing else. |
-| `vendor/three/` | Three.js r160 (npm `three@0.160.1`): `three.module.js`, `LICENSE`, and the same-revision addons the game imports (`postprocessing/` EffectComposer, RenderPass, ShaderPass, OutputPass, UnrealBloomPass, SMAAPass and their deps; `shaders/` FXAA, SMAA, Copy, Output, LuminosityHighPass; `environments/RoomEnvironment.js`; `geometries/RoundedBoxGeometry.js`). Unmodified. |
-| `starhermit.txt` | Platform manifest (`name`, `launch`, `owner`, `server`, `cover`, `control.*` keyboard actions). |
-| `sfx/` | 19 authored Opus clips + `manifest.txt` (canonical), `manifest.md`, `manifest.json`. |
-| `assets/` | Authored art: `courtyard-stone.webp`, `sanctuary-backdrop.webp`. |
-| `tests/rules.mjs` | `npm test` — engine determinism, uniqueness, solving. |
-| `tests/gfx.test.mjs` | `npm test` (`node --test`) — the graphics quality model. |
-| `tests/e2e.mjs` | `npm run test:e2e` — full Playwright playthrough at desktop and mobile viewports. |
-| `coverart.png`, `icon.png`, `favicon.svg` | Store/tab art. |
+| `starhermit.txt` | Manifest: name, description, owner, `server=score-script.js`, cover, `launch=index.html`, `engine.*`, `control.*` keyboard actions with groups, `engine.gamepad.*`. |
+| `native/main.ts` | Entry (`engine.entry`): the round and its actions, input (actions, pointer, touch), the UI built every frame (top bar, status panel, controls panel, pause/results overlay, Settings dialog, toasts, the board's accessible targets), layout breakpoints, the HUD-free playfield for the camera, lifecycle. |
+| `native/render.ts` | The courtyard scene (tiles, board/plinth, lanterns, fireflies, ring, backdrop), tile states and the refused-digit flash, the graphics look per level (shadows, detail, shading, baked occlusion, reflections, bloom, grade, anti-aliasing), camera framing (`frameCamera`), picking, tile rectangles, the digits on the 2D overlay. |
+| `native/quality.ts` | The four looks (the browser build's gfx.js presets and budgets) keyed by the runtime's quality tier and level index. |
+| `native/platform.ts` | Save document (load, save, conflict merge, foreign migration of the browser build's cloud save), the Mute setting and legacy settings migration, player/sync line, invite link, platform clock, leaderboard posting through `score-script.js`. |
+| `native/audio.ts` | The authored one-shots per event with round-robin rotation, loaded one at a time once the mixer runs. |
+| `native/i18n.ts` | `T(key, vars)` over `lang/strings.js` in the runtime's interface language. |
+| `native/style.ts` | Registers `assets/ui-style.json`, the theme, focus ring and dialog look. |
+| `native/game.ts` | Typed facade over `src/round.js`. |
+| `src/round.js` | Pure round logic (no I/O): modes → difficulty, seeds, legality, actions, scoring, progress, the save document (`roundDoc`, `restoreRound`, `mergeSaveDocs`, `readForeign`). Shared with node tests and `tools/gen-plays.mjs`. |
+| `rules.js` | Pure Sudoku engine: `generateGrid`, `countSolutions`, `makePuzzle`, `solve`, `boxIndex`. |
+| `lang/strings.js` | The nine-locale string tables (keyed, en-US complete). |
+| `assets/` | `courtyard-stone.webp`, `sanctuary-backdrop.webp`, baked `textures/grain.png` and `textures/contact-ao.png`, `ui-style.json`. |
+| `sfx/` | 19 authored Opus clips + manifests (manifests are left out of the package). |
+| `score-script.js` | Platform script (`server=`): range-checks a solved puzzle's score and posts it to `high-score`. |
+| `server.js` | Local dev static server for the packaged folder plus `/api/v1/time` (not in the package). |
+| `index.html`, `starhermit-files.json` | The web loader and file index written by `npm run package` (never edited by hand). |
+| `tools/` | `package-web.mjs`, `css.mjs` (+ `ui-style.css`), `bake-textures.mjs`, `gen-plays.mjs`, `browser-play.mjs`. |
+| `tests/` | `rules.mjs`, `round.test.mjs`, `i18n.test.mjs`, `native.mjs` + `native/*.play`. |
 
 ---
 
 ## 2. Design pillars
 
 **1. The board is the room.** The playfield is a stone floor in a courtyard, lit and framed as a
-place, not a diagram on a background. *Rules in:* a 3D perspective board, an authored dusk backdrop,
-tiles with real thickness and a physical placement sound. *Rules out:* flat 2D cell borders, UI
-chrome drawn inside the board, decorative particles competing with the digits.
+place, not a diagram on a background: a 3D perspective board, an authored dusk backdrop, tiles with
+real thickness and a physical placement sound.
 
 **2. Refusal, not correction.** An illegal digit is never written and then marked wrong; it is
-refused at entry with a red flash and a knock. *Rules in:* `isLegal` gating every placement, a
-mistake counter, permanent legality of everything on the board. *Rules out:* a "check my grid"
-button, error highlighting of placed digits, lives that end the round. The board is therefore always
-a valid partial position, which is what keeps the courtyard calm rather than accusatory.
+refused at entry with a red flash and a knock. The board is always a valid partial position.
 
-**3. Quiet, but never silent.** Every input answers within one frame with both a colour change and
-a distinct sound; nothing in the mix is bright or urgent. *Rules in:* eight separate audio events,
-four-clip rotation on the three most frequent ones, felt/stone/wood timbres. *Rules out:* music
-beds, combo stingers, voice, any cue louder than the placement tap.
+**3. Quiet, but never silent.** Every input answers within one frame with a colour change and a
+distinct object sound; nothing in the mix is bright or urgent. No music bed.
 
 **4. Nothing hidden from the player.** Seeds, the score breakdown, the difficulty weight and the
-solution-uniqueness guarantee are all inspectable or stated. *Rules in:* seeded generation, a
-per-line results breakdown, a daily seed derived from the UTC date alone. *Rules out:* secret
-difficulty adjustment, unexplained totals, any puzzle that has more than one solution.
+solution-uniqueness guarantee are all inspectable or stated.
 
-**5. Resume beats restart.** The player should be able to close the tab mid-grid and lose nothing.
-*Rules in:* every mutation writes the round to `localStorage`; a completed round restores with its
-results overlay and a frozen score. *Rules out:* a separate "continue" menu, a session timer that
-punishes stepping away (the clock stops on pause and on tab hide).
+**5. Resume beats restart.** Every mutation writes the save; a completed round restores with its
+results and a frozen score. The clock stops on pause, when the window or tab is hidden, and while
+the runtime's Options are open.
 
 ---
 
 ## 3. Player experience
 
-**Target player.** Someone who already knows Sudoku and wants a calm, good-feeling place to play
-it — plus a newcomer who can be taught the whole rule set in two lines.
-
-**First 60 seconds.** The game opens directly on a playable Easy grid; there is no title screen and
-no menu to clear. Teaching is ambient and complete on screen from frame one:
-
-1. The right panel's info list states the two things a player needs: *"Click a cell (or use the
-   arrow keys), then a number."* and *"Orange tiles are fixed clues; green tiles are yours."*
-   Colour is therefore explained before it is used.
-2. Every action button carries its keyboard shortcut in its own label — `Mark (N)`, `Hint (H)`,
-   `Clear (C)`, `Restart (R)`, `Pause (P)`, `Mute (M)` — so the keyboard layer teaches itself.
-3. The first tap on the board rings a select tick and drops a yellow ring; the cell readout below
-   the status line names the cell in words ("Cell row 4, column 7: empty"). Selection is confirmed
-   twice, visually and in text.
-4. The first digit either sinks in with a wooden tap and turns green, or is knocked back with a red
-   flash. Two attempts teach the whole rules contract.
-
-**Session shape.** Open → the saved grid is already there → 20–50 placements interleaved with
-scanning → occasional `H` when a scan stalls → completion overlay → `R` for the next grid.
-
-**The emotional beat.** When the last digit lands the placement tap is replaced by the temple-bell
-bloom, all 81 tiles repaint, the ring disappears and the score stops moving. The game gets quieter
-at the win, not louder.
+The game opens directly on a playable Easy (Learn) grid — or the saved round — with no title screen.
+The controls panel's info lines say *"Click a cell (or use the arrow keys), then a number."* and
+*"Orange tiles are fixed clues; green tiles are yours."*; every action button carries its current key
+in its label (`Mark (N)`, `Hint (H)` …, following the player's rebinds). The first tap rings a select
+tick and drops a yellow ring; the status panel names the cell in words. The first digit either sinks
+in with a wooden tap and turns green, or is knocked back with a red flash. When the last digit lands
+the temple-bell bloom plays, all tiles repaint, the ring disappears and the score stops moving.
 
 ---
 
@@ -109,54 +83,43 @@ at the win, not louder.
 
 ### Board and entities
 
-An 81-cell grid indexed `0..80`, `row = floor(i/9)`, `col = i%9`, `box = boxIndex(r,c)` =
-`floor(r/3)*3 + floor(c/3)` (`rules.js`). Four parallel arrays in `main.js` hold the state:
-`grid` (the full solution), `board` (current values, `0` = empty), `given` (fixed-clue flags), and
-`notes` (a `Set` of cell indices flagged by the player). A cell is exactly one of: a clue
-(`given[i]`), a player digit (`board[i] && !given[i]`), a marked empty (`notes.has(i)`), or empty.
+An 81-cell grid indexed `0..80`, `row = floor(i/9)`, `col = i%9`, `box = floor(r/3)*3 + floor(c/3)`.
+A round (`src/round.js`) holds `grid` (the solution), `board` (current values, 0 empty), `given`
+(clue flags), `notes` (a set of marked cells), `selected`, `mistakes`, `moves`, `hints`, `elapsedMs`,
+`gameOver` and `completedElapsed`. A cell is a clue, a player digit, a marked empty, or empty.
 
-### Puzzle construction — `buildPuzzle` (main.js), `rules.js`
+### Puzzle construction
 
 1. `generateGrid(seed)` fills all 81 cells by ordered backtracking with a mulberry32-shuffled
-   candidate list per cell. Same seed ⇒ byte-identical grid.
-2. `makePuzzle(grid, seed, target)` walks a seeded shuffle of `0..80` and clears a cell only when
-   `countSolutions(p, 2) === 1` still holds afterwards, stopping at `target` removals. The puzzle
-   therefore has **exactly one solution at every step of construction**, and `removed ≤ target`.
-3. `target` comes from difficulty: **easy 40, medium 50, hard 56** — so Easy ships 41 clues, and
-   Hard 25 or slightly more where a removal was rejected.
+   candidate list per cell. Same seed ⇒ identical grid.
+2. `makePuzzle(grid, seed, target)` clears cells in a seeded order only while `countSolutions(p, 2)
+   === 1` still holds, stopping at `target` removals: every puzzle has exactly one solution.
+3. `target` by difficulty: **easy 40, medium 50, hard 56**.
 
 ### Legal actions
 
-| Action | Precondition | Owner |
-|---|---|---|
-| Select cell `i` | not paused, not solved | `selectCell` |
-| Enter digit `d` (1–9) | a cell is selected, that cell is not a clue | `enterDigit` |
-| Erase | selected, not a clue | `eraseCell` |
-| Toggle mark | selected, cell empty | `toggleNote` |
-| Hint | not paused, not solved | `showHint` |
-| Clear / Restart | always | `clearBoard` / `restartRound` |
-| Pause / Resume | not solved | `setPaused` |
-| Mute | always | `setMuted` |
+| Action | Precondition |
+|---|---|
+| Select cell | not paused, not solved |
+| Enter digit 1–9 | a cell is selected and it is not a clue |
+| Erase | selected, not a clue |
+| Toggle mark | selected, cell empty |
+| Hint | not paused, not solved |
+| Clear / Restart / mode tab | always |
+| Pause / Resume | not solved |
+| Mute | always |
 
-### Resolution order for a digit entry — `enterDigit` (main.js)
+### Resolution of a digit entry (`enterDigit`)
 
-1. Reject outright if paused, solved, or nothing selected.
-2. If the cell is a clue → `playInvalid`, red flash, **no mistake counted** (mis-aimed input is not
-   a logic error).
-3. If the cell already holds `d` → the entry is treated as an erase (re-pressing a digit removes it).
-4. `isLegal(cell, d)` scans the cell's row, column and box against the *current board* — not the
-   solution. Failure → `mistakes++`, `playInvalid`, red flash for 220 ms, refresh, stop.
-5. Success → `applyDigit` (increments `moves` only when the cell was empty, clears any mark),
-   `playPlace`, repaint the tile.
-6. `isSolved()` re-validates all 27 groups from scratch. True → `finishRound()`. False → `refresh()`.
+1. Nothing happens if paused, solved, or nothing selected.
+2. A clue → invalid sound and red flash, **no mistake counted**.
+3. The cell already holds `d` → treated as an erase.
+4. `isLegal(cell, d)` checks the row, column and box against the *current board*. Failure →
+   `mistakes++`, invalid sound, red flash for 220 ms.
+5. Success → the digit is set (`moves++` when the cell was empty; its mark is cleared), place sound.
+6. `isSolved()` re-validates all 27 groups; true ends the round.
 
-`refresh()` is the single presentation sync point: it moves the selection ring, renders, rewrites
-the status line and cell readout, sets the progress bar, dims number-pad digits already used nine
-times, updates the Mark button's `aria-pressed`, and writes the save.
-
-### Scoring — `scoreParts` (main.js)
-
-All values are integers; formatting happens only in the overlay and status line.
+### Scoring (`scoreParts`)
 
 ```
 weight        = easy 10 | medium 20 | hard 30
@@ -168,65 +131,36 @@ timeBonus     = (solved ? max(0, 600 − elapsedSeconds) : 0)
 total         = placed + mistakePenalty + hintPenalty + solveBonus + timeBonus
 ```
 
-**Worked example.** Journey (medium, weight 20), a grid with 50 blanks. The player fills all 50
-cells — one of them via a hint, which also counts as a move — makes 3 refused entries, and finishes
-at 7:12 (432 s).
-
-```
-placed          = 20 × 50            = +1000
-mistakePenalty  = −5 × 3             =   −15
-hintPenalty     = −25 × 1            =   −25
-solveBonus      = 100 × 20 / 10      =  +200
-timeBonus       = max(0, 600 − 432)  =  +168
-total                                 = 1328
-```
-
 The results overlay prints exactly those six lines. `best[difficulty]` keeps the highest total per
-difficulty and appears in the status line as `· Best 1328`. Note the incentive shape: a hint costs
-25 but returns `weight` for the move it fills, so on Hard a hint is net positive in points and net
-negative in time — priced as a real but survivable trade.
+difficulty and appears in the status line as `· Best N`.
 
-### Progress
+### Progress, terminal state, clock
 
-`computeProgress()` = (player-owned cells holding the *correct* digit) ÷ (player-owned cells). It
-uses the solution, so a legal-but-wrong digit does not advance the bar. This is the one place the
-game reads `grid` during play, and it is why the bar can move backwards.
-
-### Terminal state
-
-The only terminal state is **solved**. There is no loss condition: mistakes are counted and priced
-but never end a round, and the clock has no limit. `finishRound()` freezes `completedElapsed`,
-records the best, plays `playSolve`, repaints all 81 tiles, drops the selection, and opens the
-results overlay. A solved round survives reload with an unchanged score.
-
-### Tie-breaks
-
-Only local bests exist, compared as a single integer per difficulty; a new total must be strictly
-greater to replace the stored one, so an equal repeat leaves the record's earlier timestamp intact.
+Progress = player cells holding the *correct* digit ÷ player cells (it can move backwards). The only
+terminal state is solved; there is no loss condition. The round clock (`elapsedMs`) advances by the
+runtime's fixed steps while a round runs unpaused, the Settings dialog is closed and the runtime's
+Options are closed; the solve freezes it.
 
 ### RNG and seeding
 
-Two independent mulberry32 streams. `rules.js` derives its own from the puzzle seed (and
-`seed ^ 0x9E3779B9` for the removal order) so generation is reproducible from the seed alone;
-`main.js` keeps a presentation-side stream, seeded at boot from `Date.now() ^ 0x5EED`, used solely
-to pick the next puzzle seed. Daily bypasses it entirely: `nextSeed()` returns
-`UTCyear*10000 + UTCmonth*100 + UTCday`, so every player on a given UTC day gets the same grid.
-Puzzle seeds are saved and re-fed to `buildPuzzle` on restore — the board is regenerated, not
-serialised.
+`rules.js` derives its own streams from the puzzle seed. `native/main.ts` keeps a mulberry32 stream
+seeded at start from `Date.now() ^ 0x5EED` to pick the next puzzle seed. Daily bypasses it: the seed
+is `UTCyear*10000 + UTCmonth*100 + UTCday` of the platform's clock (`serverNow()`, falling back to the
+device's UTC date offline), so every player gets the same grid that day. Saves keep the seed and the
+player's digits; the puzzle is regenerated on restore.
 
 ### Undo and hints
 
-There is no undo stack. Erase (Backspace / Delete / `0` / the Erase button / re-pressing the same
-digit) is the reversal primitive, and `Clear` empties every player cell while keeping the puzzle.
-`showHint` fills the selected cell if it is player-owned and currently wrong or empty, otherwise
-the first such cell in index order; it writes the solution digit, so a hint can never be refused.
+No undo stack. Erase (Backspace / Delete / `0` / the Erase button / re-pressing the digit) reverses a
+cell; Clear empties every player cell, zeroes the counters and restarts the clock. A hint fills the
+selected cell if it is a player cell that is empty or wrong, else the first such cell, selects it and
+counts a hint (and a move when the cell was empty).
 
 ---
 
 ## 5. Modes and progression
 
-Five tabs, always visible in the top bar. Choosing one plays `playMode`, sets the difficulty, and
-starts a fresh round immediately (`setActiveMode` → `restartRound`).
+Five tabs, always visible in the top bar. Choosing one plays the mode sound and starts a fresh round.
 
 | Mode | Difficulty | Target removals | Seed source |
 |---|---|---|---|
@@ -236,598 +170,303 @@ starts a fresh round immediately (`setActiveMode` → `restartRound`).
 | Practice | Easy | 40 | fresh per round |
 | Challenge | Hard | 56 | fresh per round |
 
-**Difficulty curve.** Difficulty is purely clue count, and clue count is what changes solution
-depth: 41 clues on Easy leave most cells resolvable by single-candidate scanning; 25–31 on Hard
-force cross-referencing between boxes. Score weight rises with it (10 → 20 → 30), and the solve
-bonus scales identically.
-
-**Daily content.** One Hard grid per UTC day, identical for everyone, immutable because it is a
-pure function of the date. Restarting inside Daily rebuilds the same grid rather than a new one.
-
-**Unlocks.** None. Every mode and difficulty is available at first load; the only progression the
-game keeps is `best[difficulty]`.
+Restart in Daily rebuilds the same grid. There are no unlocks; the only progression is the bests.
 
 ---
 
 ## 6. Controls and interaction
 
-### Desktop
+Actions are declared in `starhermit.txt` (grouped *Digits*, *Selection*, *Round*); players rebind
+keys and pad buttons in the runtime's Options (F1).
 
-| Input | Effect |
-|---|---|
-| Click a board tile | Select it (raycast against the 81 tile meshes) |
-| Click off the board | Clear the selection |
-| `1`–`9` | Place that digit; pressing the digit already in the cell erases it |
-| `Backspace`, `Delete`, `0` | Erase the selected cell |
-| `↑ ↓ ← →` / `W A S D` | Move the selection one cell, clamped at the edges; from no selection, jumps to the centre (index 40) |
-| `N` / `U` | Toggle the mark on the selected empty cell |
-| `H` | Hint |
-| `C` | Clear all player digits |
-| `R` | New round |
-| `P` | Toggle pause |
-| `Esc` | Pause (never unpauses — resume is deliberate); closes the Settings dialog when it is open |
-| `M` | Toggle mute |
+| Action | Keys | Gamepad | Effect |
+|---|---|---|---|
+| `digit1`–`digit9` | `1`–`9`, numpad | — | Place that digit (the cell's own digit erases) |
+| `erase` | Backspace, Delete, `0`, numpad 0 | West | Erase the selected cell |
+| `up` `down` `left` `right` | arrows, WASD | D-pad, left stick | Move the selection, clamped; from none, the centre cell |
+| `prevdigit` / `nextdigit` | `[` / `]` | LB / RB | Choose the number pad's digit (highlighted on the pad) |
+| `place` | Enter | South | Place the chosen pad digit |
+| `note` | N, U | North | Toggle the mark on the selected empty cell |
+| `hint` | H | Select | Hint |
+| `clear` | C | LT | Clear all player digits |
+| `restart` | R | RT | New round of the mode |
+| `pause` | P | Start | Toggle pause |
+| `menu` | Escape | East | Pause (never unpauses) |
+| `mute` | M | right stick press | Toggle the game's sound |
 
-Modifier-held keys (`Ctrl`/`Meta`/`Alt`) are ignored so browser shortcuts survive. `Enter`/`Space`
-on a focused `<button>` is left to the browser so the DOM controls behave normally. Keys typed into
-an `INPUT`/`TEXTAREA` are ignored. While the Settings dialog is open the game ignores every
-shortcut: the dialog owns the keyboard (Tab cycles inside it, `Esc` closes it and returns focus to the
-button that opened it).
+**Pointer and touch.** A click or tap on a tile selects it (raycast against the 81 tiles); one on the
+board's surroundings clears the selection. Presses on panels, the top bar, overlays and the dialog go
+to the UI. The number pad, Erase and the six action buttons do the same as their keys; mode tabs
+switch modes.
 
-### Mobile
+**Keys and UI focus.** At minor 20 the keys go to the board unless a widget has keyboard focus (Tab
+or the gamepad gives the UI focus). A tap or click on a button gives the keys back to the board.
+Enter on a focused button activates that button rather than placing a digit. While a round runs the
+D-pad moves the selection; paused or solved, it navigates the buttons (South activates).
 
-Tap the canvas to select; tap the number pad to place; tap `Erase`. The pad reflows to five columns
-below 700 px with the wide Erase key on the same row, and every button keeps a ≥34 px min-height
-(pad keys 38 px). The pointer path is `pointerdown` on the canvas, so a tap registers without
-waiting for a click; the same handler serves mouse and touch.
-
-### Input locking
-
-Input is locked in exactly two states: `paused` and `gameOver`. Both are checked at the top of every
-mutating action rather than by covering the canvas, so the overlay never has to trap events. There
-is no animation-driven lock — the 220 ms invalid flash is cosmetic and accepts input throughout.
-
-### Feedback contract
-
-Every input produces, in the same frame: a sound (§9), a colour change on the affected tile or
-button, and a rewritten status line. Selection additionally moves the ring and rewrites the cell
-readout. Rejection additionally flashes `#e53e3e` for 220 ms.
+**Input locking.** Selection and entries are locked while paused or solved (checked in each action).
+The 220 ms flash is cosmetic and accepts input throughout. The Settings dialog is modal.
 
 ---
 
 ## 7. Screens and UI flow
 
-There is one screen. The game boots straight into play, and the only screen-level states are three
-overlay conditions layered over the live board:
+One screen with overlay states over the live board:
 
 ```
-boot ──▶ playing ⇄ paused
-           │
-           └──▶ solved (results overlay, board still visible and frozen)
-                  │
-                  └── R / mode tab ──▶ playing
+start ──▶ playing ⇄ paused (overlay: Resume, Settings)
+             │
+             └──▶ solved (results overlay over the frozen board)
+                    └── R / Restart / mode tab ──▶ playing
 ```
 
-**Settings dialog.** The top bar's **Settings** button and a **Settings** button in the pause
-overlay open a modal dialog (`#settings`, `role="dialog"`) with a **Graphics** section. Opening it
-pauses a running round, so the clock never runs while the player adjusts graphics; closing it (Close,
-`Esc`, or a click on the dimmed backdrop) leaves the pause overlay up for a deliberate Resume. The
-panel is capped to the viewport and scrolls inside itself, so it fits portrait and short-landscape
-phones.
+**Top bar.** Title, **Settings**, and the five mode tabs (a radio group; the active tab orange).
+**Status panel.** "Status", the status line (`Easy · 41/81 · Score 0 · Mistakes 0 · 0:04 · Best N`),
+the selected cell in words, the player's name and save state when signed in, and the progress bar.
+**Controls panel.** "Controls", the 3×3 number pad (a digit placed nine times dims) with Erase, the
+six action buttons (Mark and Mute show pressed when on), and the two info lines.
+**Overlays.** Paused: heading, hint line, Resume and Settings buttons. Results: "Sanctuary complete",
+the score breakdown, the leaderboard line when posting, "Press R for a new round."
+**Settings dialog.** Opening it pauses a running round. Account: *Sign in with StarHermit* with its
+hint for guests (the runtime's sign-in), *Invite a friend* when signed in (copies the invite link,
+toast). Then *Options: graphics, sound, language, controls*, which opens the runtime's Options.
+Close or Escape closes it; the pause overlay stays for a deliberate Resume.
+**Toasts.** Invite copied / failed; signed out — playing locally.
 
-`boot` restores a saved round when one validates (`restoreRound`), otherwise builds a new one. A
-saved round that was already solved re-enters `solved` and re-opens the results overlay with the
-stored score. `visibilitychange → hidden` forces `paused`, which stops the clock.
+**Layouts** (logical size, after the player's interface scale):
+- *Desktop:* status panel top-left (300 px), controls top-right (260 px), 18 px from the edges.
+- *Phone portrait (≤ 700 px wide):* the top bar stacks (title + Settings, tabs 3 + 2); a status strip
+  (no heading/readout) under it; the controls at the bottom, full width, pad in five columns with
+  Erase beside 9, actions three per row, capped at 46% of the stage with its own scroll.
+- *Short landscape (≤ 520 px tall):* slim panels (190 / 210 px), the controls full height with a
+  scroll area; below 700 px wide the status becomes a strip left of the controls and the tabs move to
+  a second top-bar row when they do not fit.
 
-**Desktop layout.** Full-bleed canvas; the status panel is absolutely positioned top-left (300 px),
-the controls panel top-right (260 px); overlays are centred with a 320 px minimum width.
-
-**Large screens.** `ui-scale.js` sets `--ui-scale` (1 up to a 1600×1000 viewport, then
-`min(w/1600, h/1000)`, capped at 2.5); the top bar, both panels, the overlay, the Settings dialog
-and the toast are CSS-`zoom`ed by it, while the full-viewport canvas stays unzoomed and
-`frameCamera` keeps the board inside the area the larger panels leave free.
-
-**Mobile portrait (≤700 px).** The top bar stacks and the five mode tabs wrap to a full-width row.
-The status panel becomes a full-width strip at the top; the cell readout and the info list are
-hidden to protect vertical space. The controls panel moves to the bottom, full width, capped at 46%
-of viewport height with its own scroll. Overlays shrink to `100% − 24px`.
-
-**Mobile landscape.** Same rules (the breakpoint is width-based, so a 844×390 landscape phone uses
-the desktop layout with the board framed narrower by `frameCamera`).
-
-**Never cut off.** `frameCamera()` recomputes camera distance from both the vertical and horizontal
-FOV on every resize and takes the larger, so all nine columns stay on screen at any aspect ratio.
-The board must never be clipped; panels may overlay its corners because the camera pulls back
-further than the board's span. The mode tabs, number pad and Erase key must stay fully reachable —
-hence the bottom panel's own scroll rather than letting it grow past the viewport.
+**Never cut off.** `frameCamera` fits the whole board into the rectangle the panels leave free (a view
+offset centres it there; narrow rectangles get a steeper view), recomputed whenever the window or the
+panels change.
 
 ---
 
 ## 8. Art direction
 
-### Palette (exact values from `style.css` and `main.js`)
+### Palette
 
-| Role | Hex | Where |
-|---|---|---|
-| Page ground | `#1a2026` | `body` |
-| Chrome / top bar | `#232b33` | `.topbar` |
-| Panel ground | `rgba(20,26,32,0.85)` | `.panel` |
-| Rule / inactive button | `#3a4550` | borders, `.mode-btn`, `.pad-btn` |
-| Primary text | `#e8edf2` | body text |
-| Secondary text | `#9aa7b4` / `#cfd8e0` | readout, labels / info list |
-| Clue tile & active tab | `#c05621` (`0xc05621`) | fixed givens |
-| Player tile & progress fill | `#2f855a` (`0x2f855a`) | placed digits |
-| Empty tile | `#2b6cb0` | unfilled cells |
-| Marked tile & pressed toggle | `#6b46c1` | notes, `aria-pressed` |
-| Selection ring & focus outline | `#f6e05e` | ring mesh, `:focus-visible` |
-| Rejection flash | `#e53e3e` | 220 ms tile flash |
-| Courtyard floor | `0x3a4750` | board plane, multiplied by the stone scan |
+| Role | Hex |
+|---|---|
+| Page ground / backdrop fallback | `#1a2026` |
+| Top bar | `#232b33` |
+| Panel ground | `rgba(20,26,32,0.85)` |
+| Inactive button | `#3a4550` / action `#2d3742` |
+| Primary / secondary text | `#e8edf2` / `#9aa7b4`, info `#cfd8e0` |
+| Clue tile, active tab | `#c05621` |
+| Player tile, progress fill | `#2f855a` |
+| Empty tile | `#2b6cb0` |
+| Marked tile, pressed toggle | `#6b46c1` |
+| Selection ring, focus ring | `#f6e05e` |
+| Rejection flash | `#e53e3e` |
 
-Tile states are separated by hue and, secondarily, by lightness (`#c05621` is markedly lighter than
-`#2f855a`), but the real guarantee for colour-vision deficiency is that every state is also stated
-in words in the cell readout.
+Every tile state is also stated in words (the status panel's cell line and the tiles' accessible names).
 
-### Shape language
+### Shape, type, motion
 
-Everything is a rectangle with a soft radius. Tiles are boxes of `0.94 × 0.5 × 0.94` units — thick
-enough to read as inset paving rather than painted squares. The only curve in the game is the
-selection ring (`RingGeometry`, inner 0.5, outer 0.62), which is why it reads instantly as "the
-cursor" against a field of squares. Panels use 8 px radii, buttons 6 px.
-
-### Typography
-
-System sans (`Arial, Helvetica, sans-serif`) throughout; 20 px bold title with 1 px tracking, 16 px
-panel headings, 14 px body, 12 px secondary. Board digits are drawn into a 128 px canvas at
-`bold 96px Arial`, white, centred, cached per digit and shared across all sprites that show it —
-one texture per digit, not per cell.
-
-### Motion
-
-Gameplay motion is the progress bar's 200 ms width ease, the 220 ms rejection flash, and the
-camera reframe on resize. Ambient motion (Graphics presets above Low): the selection ring breathes,
-the lantern flames flicker, and fireflies drift and pulse around the plinth — never over the grid.
-Ambient motion stops under `prefers-reduced-motion: reduce` (the ring holds a steady glow). The `requestAnimationFrame` loop keeps the canvas
-current and ticks the HUD clock at ~2 Hz, early-returning while the document is hidden. No camera
-drift and no tile animation; the Low preset has no particles or post-processing, which is what lets
-the game run at full rate on software WebGL (as the e2e proves under SwiftShader).
-
-**Reduced motion.** Ambient motion honours `prefers-reduced-motion`. The gameplay motions (one
-200 ms bar tween and one colour flash) do not yet branch on it (see §17).
+Tiles are `0.94 × 0.5 × 0.94` boxes (rounded on detailed looks); the selection ring is the only
+curve. Text is the system sans (`sans-serif`, Arial on Windows): 20 px bold title with 1 px tracking,
+16 px headings, 14 px body, 12 px secondary. Board digits are the browser build's 128 px canvas digit
+(bold 96 px, white, soft dark halo; 256 px on Ultra) drawn on the 2D overlay at each tile's projected
+place and size, so they are never bloomed, tone mapped or darkened. Motion: the progress bar eases,
+the 220 ms flash, the breathing ring, flickering lantern flames and lights, drifting fireflies; the
+runtime's reduced-motion option stops the ambient motion (the ring holds a steady glow).
 
 ### Graphics
 
-Lighting is a cool dusk hemisphere fill, one warm key directional light from the front-left and a
-faint cool rim light from behind, rendered with ACES filmic tone mapping into sRGB output. Board
-digits are drawn in a separate last pass straight to the canvas — never tone-mapped, bloomed or
-darkened — and their sprites carry a soft dark halo, so they keep full contrast at every setting.
-Optional effects: key-light PCF soft shadows (1024²/2048²/4096², frustum fitted to the plinth;
-the scene is static, so the shadow map re-renders only when settings change); contact ambient
-occlusion baked into a grout/rim overlay under the tiles (On), plus tiles darkening towards their
-base (High) — the board never moves, so this costs nothing per frame; bloom limited to emissive
-highlights (threshold 0.9: selection ring, lantern flames, fireflies); a colour grade (gentle
-S-curve, slight saturation, warm highlights / cool shadows) with vignette; FXAA, SMAA or MSAA;
-image-based reflections from a PMREM-filtered `RoomEnvironment`; fireflies (a third or all of the preset's firefly budget); and
-**Detail** — Plain is the original boxes on a flat stone plane, Detailed is rounded tiles with a
-clearcoat finish by state (clues glazed, the player's digits satin, open cells matte; on Balanced the
-same cue is carried by roughness instead of a clear coat) and procedural
-grain in roughness and bump, a raised limestone plinth with a soft contact shadow, and four stone
-lanterns whose far pair casts warm flickering light (High/Ultra; on Balanced the flames and halos glow
-without point lights). Post-processing (EffectComposer: RenderPass →
-UnrealBloom → OutputPass → grade → SMAA/FXAA) runs only when bloom, grade, FXAA or SMAA is on;
-otherwise the scene renders straight to the canvas with its own MSAA.
+Cool dusk hemisphere fill, a warm key directional light (front-left) with PCF shadows, a faint cool
+rim light, ACES filmic tone mapping. Light intensities are three.js r160's ÷ π (the engine's
+convention). The look follows the runtime's graphics level (Options › Graphics: Auto or a level;
+the runtime owns render scale, pixel-ratio cap, adaptive resolution, the frame-rate limit and its
+readout):
 
-The Settings dialog's **Graphics** section offers a quality preset — Auto (the default, shown as
-"Auto (detected: <tier>)"; chosen from the StarHermit hardware level below), Low, Balanced, High, Ultra — a render scale slider (50–200% of the
-preset's), one select per effect (Shadows, Ambient occlusion, Bloom, Colour grade, Anti-aliasing,
-Reflections, Fireflies, Detail; "From preset (<tier>)" by default), Adaptive resolution (on by
-default: every 90 frames, an average over 26 ms steps the resolution down 10% to a 60% floor and
-under 14 ms steps it back up 5%) and Show frame rate (a readout in the top bar), plus a summary
-line "GPU name · Level N · cost summary · W×H px" ("Level" localized). Choosing a preset clears the per-effect overrides.
-Changes apply immediately without a reload and persist in `localStorage['number-sanctuary:gfx']`.
-Pixel ratio is min(devicePixelRatio, preset cap) × preset scale × render scale × adaptive scale,
-with caps Low 1, Balanced 1.5, High/Ultra 2 (Ultra also renders at 125%), so Low never draws more
-pixels than the game did before presets existed. If the post-processing chain cannot be built or
-fails to render, the game renders without it and the panel says so. The body carries
-`data-gfx-preset`, `data-gfx-auto` and one `data-gfx-<category>` attribute per effect for tests.
-
-| Preset | Shadows | AO | Bloom | Grade | AA | Reflections | Fireflies | Detail | DPR cap |
+| Tier | Shadows | Baked AO | Bloom | Grade | AA | Reflections | Fireflies | Detail | Tile shading |
 |---|---|---|---|---|---|---|---|---|---|
-| Low | off | off | off | off | MSAA | off | off | plain | 1 |
-| Balanced | 1024² | on | on | on | FXAA | on | low (27) | detailed | 1.5 |
-| High | 2048² | on | on | on | SMAA | on | high (110) | detailed | 2 |
-| Ultra | 4096² | high | on | on | MSAA | on | high (160) | detailed | 2 (×1.25) |
+| Low | off | off | off | off | MSAA | off | off | plain board | Lambert |
+| Balanced | 1024² | on | on | on | FXAA | on | ⅓ of 80 | plinth + lanterns | Standard satin |
+| High | 2048² | on | on | on | SMAA | on | 110 | + 2 lantern lights | Physical clear-coat glaze |
+| Ultra | 4096² | high | on | on | MSAA | on | 160 | + 2 lantern lights | as High, 256 px digits |
 
-**Hardware-level detection.** `gpu-level.js` (shared StarHermit copy, `window.StarHermitGpu`, also in
-`server.js`'s file table) rates the WebGL unmasked renderer plus device facts (`detectSystem()`:
-phone/tablet, cores, memory, screen) on the StarHermit hardware level 0–20 (0 = Galaxy S20 / Intel UHD
-or weaker, every software renderer and no WebGL; 20 = RTX 5090; each level ≈ 1.23×; laptop parts two
-levels below desktop; phones, tablets and ≤ 4 GB machines capped at 9). `gfx.js` maps it with
-`presetForLevel(level, { low: 0, balanced: 4, high: 10, ultra: 17 })`, so Auto picks Ultra on strong
-GPUs; adaptive resolution still steps down when slow. Headless SwiftShader is level 0 → Low. Phones and
-tablets pace Auto FPS at half the display refresh rate ("Auto (half refresh rate)") and start at 16
-simultaneous sounds (shared `game-options.js`).
-
-**Per-preset budgets** (`BUDGETS` / `budgetFor` in `gfx.js`). Each preset holds 60 FPS on the weakest
-GPU Auto gives it — Low at level 0, Balanced 4, High 10, Ultra 17. The grid, digits, colours, hit areas
-and rules are identical on every preset; only visuals change. Firefly counts are tuned at the floor
-level (the table above) and scale up within the preset on faster GPUs (`StarHermitGpu.scaleBudget`,
-≤ 2×, at most 320).
-
-| Budget | Low | Balanced | High | Ultra |
-|---|---|---|---|---|
-| Tile shading | Lambert (plain tiles) | Standard satin (finish via roughness) | Physical clear-coated glaze | as High |
-| Digit sprite texture | 128 px | 128 px | 128 px | 256 px |
-| Lantern point lights (Detail on) | 0 | 0 | 2 | 2 |
-| Fireflies at Fireflies high | 50 | 80 | 110 | 160 |
-| Bloom resolution | ½ | ½ | ½ | full |
-
-**Benchmark** (`node tools/gfx-bench.mjs number-sanctuary`; hook `tests/gfx-bench.mjs` picks the preset
-in Settings → Graphics, switches to Practice and keeps solving by tapping open cells on the 3D board and
-typing their digits, restarting with R when solved). Measured 2026-10-17 (GPU ms above the draws-skipped
-floor, projected to the preset's floor level; CPU p90 on the RTX 5090 run):
-
-- Desktop 1920×1080: PASS low (typical 0.00 / slow 1.98 ms GPU, CPU 0.90 ms); PASS balanced (3.52 / 1.47,
-  CPU 1.50); PASS high (1.25 / 1.18, CPU 1.60); PASS ultra (1.29 / 1.89, CPU 1.50).
-- Mobile 390×844 @3×: PASS low (0.00 / 0.00, CPU 1.00); PASS balanced (2.03 / 0.00, CPU 1.50).
-
-### The hero
-
-The board. The camera sits at roughly 0.75 × distance in Y and 0.72 in Z, framing the grid as a
-floor seen from a standing height. The backdrop is deliberately dark, low-contrast and out of focus
-so it establishes place without pulling the eye off the digits.
-
-### Visual assets the design calls for
-
-- A weathered pale limestone material for the courtyard floor, flat-lit and free of any marking, so
-  it multiplies into the base colour without adding readable detail that competes with the digits.
-- A dusk courtyard backdrop with a low horizon, distant colonnade, still water, and only two small
-  warm lights — dark enough to sit behind a bright board without contest.
-
-Both ship (§15).
+Fireflies scale up within a tier with the level index (≤ 2×, at most 320). Detail: Plain is boxes on a
+flat stone plane; Detailed is rounded tiles with a finish by state (clues glazed, player digits satin,
+open cells matte), grain in roughness and bump, a limestone plinth with a soft contact shadow and a
+shadow-catching ground, and four stone lanterns. Baked contact occlusion darkens the grout and rim
+(an overlay; "high" also darkens tile bases). Reflections are a PMREM-filtered `RoomEnvironment` as
+each PBR material's own envMap with the old intensities (0.3 on plinth, lanterns and detailed tiles).
+Bloom: strength 0.4, radius 0.55, threshold 0.9 (the browser build's 0.75 bloomed the ring and
+fireflies more on the engine than on three.js; 0.4 matches the old screenshots). Grade: display-space
+contrast 0.11 (the old 0.22 S-curve), saturation 1.06, cool shadows / warm highlights, vignette 0.26.
 
 ---
 
 ## 9. Audio direction
 
-**Mix philosophy.** Object sounds, not game sounds. Every cue is something a hand could do to a
-physical board: wood, stone, glass, brass, cloth, felt. Nothing is pitched as a reward, and the
-loudest event (the completion bloom) is a bell allowed to decay rather than a stinger.
+Object sounds, not game sounds: wood, stone, glass, brass, cloth, felt; no music or ambience bed. The
+clips play on the runtime's *effects* bus (Options › Audio owns volumes, mute and the voice limit);
+the game's Mute (M) silences its effects on top and is remembered (game setting `muted`, synced with
+the account). Clips load once the mixer runs (natively at once, in browsers after the first press),
+one at a time; an event whose clip is still loading is silent. Place, invalid and select rotate
+through four clips each.
 
-**Buses.** One gain node between every source and the destination (`audio.js`). Mute sets its gain
-to 0 and `setVolume` clamps to `[0,1]`; there is no per-category submix because there is only one
-category. There is no music and no ambience bed — the courtyard is silent between actions, which is
-what makes the placement tap land.
+| Event | Files | When |
+|---|---|---|
+| place | `place-wood-tap`, `place-stone-set`, `place-peg-thunk`, `place-glass-tick` | a legal digit lands |
+| invalid | `invalid-wood-knock`, `invalid-dull-thud`, `invalid-rubber-bounce`, `invalid-dice-rattle` | a refused digit (clash or clue) |
+| select | `select-switch-tick`, `select-pen-click`, `select-brass-chime`, `select-cork-pop` | a cell is selected |
+| solve | `solve-bloom-chime`, `solve-bowl-swell` | the grid completes |
+| hint | `hint-glass-shimmer` | a hint reveals a digit |
+| erase | `erase-brush-sweep` | a digit or mark is removed |
+| pause / resume | `pause-stone-close` / `resume-stone-open` | pause opens / play resumes |
+| mode | `mode-cloth-turn` | a mode tab is chosen |
 
-**Unlock and fallback.** The AudioContext resumes on the first `pointerdown` or `keydown`; sample
-fetches start only after that. Until a clip has decoded — and permanently if it 404s or fails to
-decode — the event is carried by a sine `beep()` fallback, so no input is ever silent. Before the
-first gesture nothing is played or created (the solve chime of a results screen restored at boot is
-skipped), which keeps the browser's autoplay warning out of the console. The three
-high-frequency events rotate round-robin through four clips each so a run of placements never
-repeats a sample back to back.
-
-### SFX event table
-
-`sfx/manifest.txt` is generated from this table and is the canonical on-disk record.
-
-| Event id (`audio.js`) | File | Description | Usage context |
-|---|---|---|---|
-| `playPlace` | `place-wood-tap.opus` | Soft tap of a wooden number tile set onto a board | A legal digit lands in the selected cell |
-| `playPlace` | `place-stone-set.opus` | Smooth stone tile on a wooden tabletop, rounded click with a low thud | Rotation variant |
-| `playPlace` | `place-peg-thunk.opus` | Muted thunk of a peg seating into a board hole | Rotation variant |
-| `playPlace` | `place-glass-tick.opus` | Delicate tick of a glass token on wood | Rotation variant |
-| `playInvalid` | `invalid-wood-knock.opus` | Dull knock on a hollow wooden box | Digit clashes with row/column/box, or the player types over a clue |
-| `playInvalid` | `invalid-dull-thud.opus` | Felt mallet on wood, low and gentle | Rotation variant |
-| `playInvalid` | `invalid-rubber-bounce.opus` | Soft rubber ball bouncing once on wood | Rotation variant |
-| `playInvalid` | `invalid-dice-rattle.opus` | Two dice shaken once in a wooden cup | Rotation variant |
-| `playSelect` | `select-switch-tick.opus` | Crisp tick of a small metal switch | A cell becomes selected (tap or arrow key) |
-| `playSelect` | `select-pen-click.opus` | Retractable pen button | Rotation variant |
-| `playSelect` | `select-brass-chime.opus` | Tiny brass bell, quick decay | Rotation variant |
-| `playSelect` | `select-cork-pop.opus` | Small cork pop | Rotation variant |
-| `playSolve` | `solve-bloom-chime.opus` | Three temple bells struck together, blooming over stone | The grid completes; results overlay opens |
-| `playSolve` | `solve-bowl-swell.opus` | Singing bowl struck softly, swelling and decaying | Rotation variant |
-| `playHint` | `hint-glass-shimmer.opus` | Airy shimmer of a fingertip on a glass rim | A hint reveals one digit |
-| `playErase` | `erase-brush-sweep.opus` | Dry brush wiping chalk dust from slate | A player digit or mark is removed |
-| `playPause` | `pause-stone-close.opus` | Stone slab settling closed, muffled hush | Pause overlay opens (P / Esc / button / tab hidden) |
-| `playResume` | `resume-stone-open.opus` | Stone slab sliding open, gentle airy release | Play resumes |
-| `playMode` | `mode-cloth-turn.opus` | Heavy linen page turning over wood | A mode tab is chosen, before the new round builds |
-
-All clips: MOSS-SoundEffect v2.0, 48 kHz mono Opus, 96 kbps VBR, loudness-normalised to −20 LUFS,
-100 inference steps, 1–2 s.
+All clips: MOSS-SoundEffect v2.0, 48 kHz mono Opus, −20 LUFS (`sfx/manifest.txt` is canonical).
 
 ---
 
 ## 10. Localization
 
-**Shipping locales** (`i18n.js`, `LOCALES`): `en-US` (base), `en-GB`, `es-419`, `es-ES`, `de-DE`,
-`fr-FR`, `fr-CA`, `pt-BR`, `it-IT`.
-
-**Where strings live.** One table in `i18n.js`. `en-US` is complete; every other locale is a partial
-override merged over it, so a missing key degrades to English rather than to a blank node.
-Regional pairs are built by `Object.assign` from their parent (`es-419` from `es-ES`, `fr-CA` from
-`fr-FR`, `en-GB` from `en-US`) and override only what genuinely differs — *Aide* vs *Indice*,
-*pencilled* vs *marked*, `tú`- vs `usted`-neutral imperatives.
-
-**Selection.** Settings → Language (the shared `sh-language.js` panel) offers Automatic plus the
-nine locales. Automatic follows the StarHermit account's preferred language when signed in, then
-`navigator.languages`, then `en-US`; an explicit choice is stored per player
-(`number-sanctuary.language.<user|guest>`, migrating the old `number-sanctuary:lang` value) and, when
-signed in, synced to the account's `ui.language` setting. `?lang=` forces a locale for that page
-load (QA) and hides the picker. The language is not mirrored into the game's own settings KV.
-`document.documentElement.lang` and `document.title` follow the active locale, which is also
-exposed on `Game.state.locale`.
-
-**Application.** `applyStaticStrings()` walks `[data-i18n]` (textContent) and
-`[data-i18n-aria-label]` (aria-label); dynamic text — the status line, cell readout, progress-bar
-value text, sync status, mute button label, and both overlays — calls `t()` with `{name}`
-interpolation. A language change (`ns-language` event) re-renders all of it in place without
-touching the round: the pause or results overlay (including the leaderboard line) is rebuilt, and
-the game's own Graphics controls are rebuilt inside `#gfx-own` so the shared controls mounted after
-it in `#gfx-section` stay put. `tests/i18n.test.mjs` checks that every key used in code and markup
-exists and that every locale translates every key.
-
-**Settings strings.** The Settings dialog and every Graphics label, tier, summary fragment and
-the post-processing note are localized in all nine locales (`settings.*`, `gfx.*` keys); acronyms
-(FXAA/SMAA/MSAA) and the GPU name stay as-is.
-
-**Expansion allowance.** Panels are fixed-width (300 px / 260 px) and buttons are flex-sized, so
-strings must fit roughly 1.4× the English length. Action-button labels keep their Latin shortcut
-letter untranslated in parentheses (`Aiuto (H)`), because the key binding does not change with the
-locale.
+Nine locales (`lang/strings.js`): `en-US` (complete), `en-GB`, `es-419`, `es-ES`, `de-DE`, `fr-FR`,
+`fr-CA`, `pt-BR`, `it-IT`; regional tables override only what differs (*Pencil* vs *Mark*, *Aide* vs
+*Indice*). The language is the runtime's interface language (Options › Language, else the account's
+or device's); every string is drawn through `T()` each frame, so a change shows on the next frame
+without touching the round. Action labels keep their key in parentheses, replaced by the effective
+binding. `tests/i18n.test.mjs` checks that every key the client uses exists in every full locale with
+its placeholders, and that no row is unused.
 
 ---
 
 ## 11. Accessibility
 
-- **Keyboard-only path.** Arrow keys or WASD move the selection from any state (with no selection,
-  they jump to the centre cell); digits place, Backspace erases, and every action has a single-key
-  shortcut. A player can start, solve and restart a grid without ever touching the pointer.
-- **Focus.** `:focus-visible` draws a 3 px `#f6e05e` outline with 2 px offset on every button. The
-  mode tablist uses roving `tabindex` (`0` on the active tab, `-1` on the rest) with
-  `aria-selected` maintained by `setActiveMode`.
-- **Live regions.** `#status-text` and `#cell-readout` are `aria-live="polite"`, so the score line
-  and the spoken description of the selected cell ("Cell row 4, column 7: 6 (fixed)") are announced
-  as they change. The overlay is `role="status" aria-live="polite"`, so pause and the full results
-  breakdown are read out when they appear.
-- **Progress.** `#progress-bar` is a `role="progressbar"` with `aria-valuemin/max/now` and an
-  `aria-valuetext` of `"NN% complete"`, labelled by `#progress-label`.
-- **The canvas is not the interface.** `#scene-canvas` carries `aria-hidden="true"`; nothing that a
-  screen reader needs exists only in WebGL. Cell contents, selection and score all have DOM text.
-- **Toggle state.** Mark and Mute expose `aria-pressed`, kept in sync on every refresh.
-- **Contrast.** Body text `#e8edf2` on `#1a2026` is ~14:1; secondary `#9aa7b4` on the panel ground
-  is ~6:1. Board digits are white on saturated mid-tones.
-- **Target sizes.** Pad buttons ≥40 px desktop / 38 px mobile; action buttons ≥34 px; mode tabs
-  36 px on mobile. Board cells are far larger than any of these at every framing.
-- **Reduced motion.** Ambient graphics motion (fireflies, flicker, ring breathing) stops under
-  `prefers-reduced-motion`; the gameplay motion budget is a 200 ms bar tween and a 220 ms colour
-  flash — see §17.
-- **Settings dialog.** Every control is a native `<select>`, range or checkbox with a `<label>`;
-  it opens with focus on Quality, traps Tab, closes on `Esc` and returns focus to its opener.
+- **Keyboard-only and gamepad-only paths** cover every action (§6).
+- **Focus ring:** a 3 px `#f6e05e` ring 2 px out on every focusable widget.
+- **The board is in the accessibility tree:** each tile is a button target named "Cell row R, column
+  C: value" (value `empty`, `marked, empty`, a digit, or `N (fixed)`), inside a group named *Sudoku
+  board*; screen readers, the browser's ARIA mirror and play scripts reach tiles by name.
+- **Panels** are named *Status and progress* and *Controls and info*; the progress bar is a meter
+  ("Progress", "NN% complete"); Erase is named *Erase selected cell*; mode tabs are radios; Mark and
+  Mute are toggles shown selected when on.
+- **Runtime options** (interface size, text size, high contrast, reduced motion) apply over the
+  game's styles; the layout is computed in logical pixels after the interface scale.
+- **Target sizes:** pad ≥ 40 px desktop / 38 px phone, actions ≥ 34 / 32 px, tabs 36 px on phones.
 
 ---
 
 ## 12. StarHermit integration
 
-**Used.**
-- `starhermit.txt` manifest: `name=Number Sanctuary`, `launch=index.html`, `owner`, `server=score-script.js`,
-  `cover=coverart.png`, per the platform's manifest convention (https://wiki.starhermit.com/).
-- `score-script.js` is registered as the game's platform script; it only range-checks and posts
-  scores. `server.js` is the local dev static host for the launch bundle. It binds `STARHERMIT_PORT` (or `PORT`, defaulting to 80), and serves an
-  explicit allow-list: the bundle files (including `starhermit-sdk.js`) plus `sfx/*.{opus,json}` and `assets/*.{webp,png,glb}`
-  matched against strict regexes. `tests/`, `tools/` and dotfiles are unreachable by construction.
-- `coverart.png` (1200×675) and `icon.png` (256×256) supply the platform's store presentation.
-
-**Used (hosted mode), and why.** All platform traffic goes through the shared SDK
-`starhermit-sdk.js` (unmodified canonical copy, loaded before `main.js` as `window.StarHermit`);
-`platform.js` adapts it. Without a token nothing is requested.
-- *Launch token* — `StarHermit.init()` reads `#game_token=` (library launch) or `#access_token=`
-  (direct sign-in return) once and strips it; the slug is the `game_scope` claim. The SDK renews
-  the token before expiry; if renewal is refused the player line hides, a "signed out — playing
-  locally" toast shows, Settings re-offers sign-in and play continues on localStorage.
-- *Sign-in* — Settings → Account shows **Sign in with StarHermit** on `*.starhermit.com` without a
-  token; hidden when signed in and when running locally (the section then hides entirely).
-- *Nickname* — the profile nickname (fallback `Player ` + id prefix) shows with a cloud-sync
-  status in the status panel.
-- *Cloud save* — the `{best, round}` doc mirrors to the `game:<slug>` slot (2 s debounce,
-  pagehide flush, writes conditional on the version last read); localStorage stays the offline
-  cache. The cloud and local docs are merged, never one dropped (`platform.mergeSaveDocs`): best
-  scores keep the higher value per difficulty; for the same puzzle the round further along wins (a
-  finished round first, then more filled cells, ties keep local), for different puzzles the local
-  round stays, and a missing round is taken from the other side. When a save is rejected because
-  another device saved first, the game re-reads the slot, folds its best scores in, keeps the
-  round being played and uploads the merged doc.
-- *Settings KV* — mute and the Graphics settings are patched to the per-player settings
-  store on change and applied at boot (the account value wins).
-- *Invite* — signed in, Settings → Account shows **Invite a friend**, which copies
-  `StarHermit.inviteLink()` to the clipboard and confirms with a toast.
-- *Controls* — keyboard input is routed by `KeyboardEvent.code` through
-  `StarHermit.loadBindings()` (platform rebinds over the `control.*` defaults in
-  `starhermit.txt`); the action buttons' key hints show the effective keys.
-
-- *Leaderboard* — one board, `high-score` (integer, higher is better, 0–100,000). Every solved
-  puzzle outside Learn posts its total (floored at 0) through `StarHermit.submitScores` (a
-  practice session whose `score-script.js` posts it), and the results overlay shows
-  "Leaderboard rank: #N" (or posted / not posted). Standalone play posts nothing and shows no line.
-
-Account and leaderboard strings are localized in all nine locales (`i18n.js` `account.*`, `lb.*`).
-
-**Not used.** Achievements, matchmaking, friends/invite picker, chat, replays, realtime and voice —
-the game is single-player; the only platform session is the short practice session that posts a
-score, and no host or launch token is ever persisted.
+- **Manifest:** `name`, `description`, `owner`, `server=score-script.js`, `cover=cover.jpg`,
+  `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.19.1`,
+  `engine.minor=20`, `engine.capabilities=platform,storage,clipboard`, the actions and pad defaults.
+- **Player:** `player()`; signed in from the first frame in the client, or after the runtime's sign-in
+  (Settings › Sign in). The status panel shows the display name and the save state (*Saving to cloud…*
+  / *Cloud save synced* / *Cloud sync failed*). Signing out shows a toast; play continues locally.
+- **Save:** `{ best, round }` (schema 1) through `saves.save` after every change (device at once,
+  account debounced by the runtime), and on suspend/quit. Conflicts merge (`mergeSaveDocs`): bests
+  keep the higher value per difficulty; the same puzzle's further-along round wins (finished first,
+  then more filled cells, ties local); different puzzles keep the local round. An account save that
+  replaces the device's later in the session merges its bests, and its round only while the player
+  has not acted since start.
+- **Migration from the browser build:** its cloud slot (`game:<slug>`, the JS SDK's zipped
+  `save.json` with the same `{ best, round }` JSON) shows as foreign; it is read from
+  `saves.foreign().text`, merged in and replaced once (`replaceForeign`). Its settings KV (`muted`,
+  `graphics`, language keys) is read through `settings.legacy`: `muted` becomes the game's Mute
+  unless set since; all legacy keys are then removed. Guests' old browser `localStorage` (round and
+  graphics) cannot migrate.
+- **Leaderboard:** one board, `high-score` (integer, higher is better, 0–100,000). A solved puzzle
+  outside Learn, signed in, opens a practice session whose socket sends `{ type: 'result', scores:
+  { 'high-score': max(0, total) } }`; `score-script.js` range-checks and posts it (server-authoritative
+  per platform policy: the client only proposes the total) and acknowledges; the results show
+  *Posting score…*, then *Leaderboard rank: #N*, *Score posted…* or *Score not posted…*. A restored
+  solved round is not posted again.
+- **Invite:** `inviteLink()` fetched ahead; *Invite a friend* copies it (`clipboard`).
+- **Clock:** `serverTime()` at start, `serverNow()` for the Daily's date.
+- **Not used:** achievements, rooms, matchmaking, chat, replays, voice.
 
 ---
 
 ## 13. Technical architecture
 
-**Module responsibilities.** `rules.js` is pure with no DOM or global dependencies, which lets
-`tests/rules.mjs` exercise it under plain Node; `gfx.js` is likewise pure and tested under Node.
-`main.js` is the only module holding mutable game state and the only one touching Three.js;
-`settings.js` touches only the Settings dialog's DOM. `audio.js` and `i18n.js` never read game state.
-`platform.js` owns all StarHermit I/O and is driven only by `main.js`. Dependencies run strictly
-one way: `main.js → {rules, audio, i18n, platform, gfx, settings}` and `settings → gfx`.
-
-**Determinism and replay.** A round is fully described by `(seed, difficulty)`; the solution and the
-clue set are regenerated from the seed on every load rather than stored. `generateGrid` and
-`makePuzzle` use their own seeded mulberry32 streams and no global RNG, so the same seed reproduces
-the same grid on any machine — which is what makes the Daily identical for everyone and what
-`tests/rules.mjs` asserts directly.
-
-**Persistence.** `localStorage['number-sanctuary:v1']` holds `{ best, round }`, written on every
-`refresh()` and on `pagehide`. `round` carries mode, difficulty, seed, counters, the board, the
-`given` mask, marks and elapsed seconds. `restoreRound` validates the mode, difficulty and array
-lengths, rebuilds the puzzle from the seed, then re-applies only the player's digits over the
-regenerated clues — a corrupted or stale save is rejected and a fresh round is built instead. Every
-storage access is wrapped in `try/catch`, so private mode or a full quota degrades to a non-resuming
-but fully playable game. `localStorage['number-sanctuary:gfx']` the graphics settings (`{ preset, render_scale, adaptive,
-show_fps, <category>: tier }`; absent keys mean Auto / from preset); it is not mirrored to the cloud save. In
-hosted mode the same doc is zipped (stored entry, CRC32) + base64'd into the single platform
-cloud-save slot: `PUT` is debounced ~2 s and flushed on `pagehide`/`visibilitychange`, and at boot
-the remote doc is merged with the local cache as above (boot waits at most 1.5 s; a slower load
-still merges its best scores when it arrives, and its round only if the board was not changed
-meanwhile; nothing is PUT before it resolves). Without a token none of
-this runs — localStorage alone is the whole story.
-
-**Performance budgets.** 81 tile meshes + 81 sprites + 1 plane + 1 ring ≈ 165 objects, one shared
-box geometry, one material per tile, and one cached texture per distinct digit (≤9 textures for the
-whole game). No per-frame allocation in `animate`; the HUD string is rebuilt at most twice a second;
-`render()` is called on demand from `refresh()` as well as per frame. The pixel ratio is capped per
-preset (§8 Graphics) and never exceeds 3; the shadow map renders only on settings changes.
-The whole scene renders at full rate under SwiftShader in CI, which is the effective floor.
-
-**How the e2e drives the real UI.** `tests/e2e.mjs` serves the repo over a loopback HTTP server and
-drives headless Chrome. Every *action* is a real user action: `page.mouse.click` /
-`page.touchscreen.tap` on canvas coordinates, real `page.keyboard.press`, real clicks on
-`.mode-btn`, `.pad-btn` and `.action-btn`. The game's own module is imported **read-only** for two
-things: `Game.state` to assert outcomes, and `Game.project(idx)` to convert a cell index to page
-coordinates through the live camera — so the test clicks exactly where the player sees the cell, and
-skips cells the current viewport pushes off-canvas. Any `pageerror` or non-allow-listed console
-error fails the pass.
+- **Pure logic** (`rules.js`, `src/round.js`, `lang/strings.js`) is plain ES modules imported by the
+  engine client (`allowJs`) and the node tests unchanged.
+- **Frame order** (`onUpdate`): apply the look for the current graphics level, pump audio loads, build
+  the UI (top bar, status, controls, overlay, board targets, dialog, toasts), compute the playfield,
+  run the button actions collected during the build, decide queued board presses (after the UI so
+  `ui.pointerOver()` is this frame's), update the scene, draw the digits.
+- **Fixed steps** advance the round clock; nothing else simulates.
+- **Determinism:** a round is `(mode, seed)`; the Daily is a function of the date, which lets
+  `tools/gen-plays.mjs` write a script that solves today's Daily through the UI.
+- **Budgets:** 81 tile meshes (four materials each, swapped by tier), ~110 scene objects, one digit
+  sheet canvas, two baked textures, two authored images, 19 clips.
 
 ---
 
 ## 14. Testing and acceptance criteria
 
-**`npm test` → `tests/rules.mjs`** asserts, across five seeds including `0xFFFFFFFF`:
-generated grids are complete and uniquely solvable; generation is reproducible for a seed; for
-removal targets 40/50/56 the reported `removed` equals the actual blank count, is `> 0` and `≤`
-target, the puzzle still has exactly one solution, and `solve()` returns the original grid; and that
-a grid with a duplicated digit, an empty array, and an all-10s array each yield `countSolutions = 0`
-and `solve = null`.
+`npm test` runs:
+- `tests/rules.mjs` — generation is complete, reproducible and uniquely solvable for removal targets
+  40/50/56 across five seeds; invalid puzzles count 0 solutions and do not solve.
+- `tests/round.test.mjs` — mode → difficulty and clue counts, the Daily seed, refusals and mistakes,
+  erase-by-same-digit, marks, hints, clear, the score breakdown and the solve, restore from a saved
+  round, `mergeSaveDocs`, and reading the browser build's cloud save text.
+- `tests/i18n.test.mjs` — key coverage and placeholders in all locales.
+- `tests/native.mjs` — the web index matches the files (`npm run package` ran last), `tsc` (no
+  `skipLibCheck`), `starhermit check .` with zero warnings, and signed-out render checks of
+  `tests/native/menus.play` (desktop: selection, mark, pause/resume, Settings dialog, mute, mode
+  switch, restart, hints to the results, new round, clear), `phone.play` (390×844 @3: touch a tile,
+  Hint, Erase, Mark, pad digits, Practice solved by Hint taps), `landscape.play` (844×390 @3:
+  Challenge solved by keys, pad-digit choice and Enter) and today's generated Daily (every open tile
+  clicked by name and its digit typed or clicked on the pad; no mistakes, no hints).
 
-**`npm test` → `tests/gfx.test.mjs`** (`node --test`) asserts hardware level → preset
-(SwiftShader/llvmpipe/no WebGL, AMD Radeon Graphics and Intel UHD → Low, Iris Xe → Balanced, GTX 1070 →
-High, RTX 4080/5090 → Ultra, phones such as Adreno 740 capped at Balanced), the per-preset budget table
-(explicit, non-decreasing, floor-level tuned, scaling with the level),
-`resolve()` for Auto, explicit presets, per-effect overrides, invalid values and the 50–200%
-render-scale clamp, that choosing a preset clears overrides while keeping scale and toggles, and
-the `describe()` summary.
-
-**`npm run test:e2e` → `tests/e2e.mjs`** runs 15 desktop steps (1280×800) and 14 mobile steps
-(390×844, touch): boot shows the title, the canvas, five mode tabs, an Easy status line and exactly
-41 clues consistent with the solution; the mode tabs move difficulty Easy→Medium→Hard→Easy; a canvas
-click selects the centre cell; a keyboard digit fills a cell and advances progress and score; a
-row-clashing digit is refused and increments mistakes; the pad places and erases; `N` toggles a
-mark; `H` fills one correct cell and counts a hint; `P` opens the overlay, the Resume button closes
-it, and mute toggles via both button and `M`; arrows move the selection to the expected indices; a
-reload restores mode, seed and board; `C` removes only player digits and resets counters; `R`
-produces a different seed with reset counters; and through the visible Settings button the Graphics
-section fits the viewport, pauses the round, shows "Auto (detected: Low)" under SwiftShader and "Level 0" in the summary, applies
-Low then High (checked via `data-gfx-*` on `<body>` and the summary line), a Bloom override, the
-render-scale slider and the frame-rate toggle live, keeps them across a reload, clears overrides
-when Ultra is chosen, and returns to Auto. Any console error **or warning** fails a pass. Desktop additionally solves all 81 cells through the
-UI, reaches the results overlay, and verifies the score is frozen and survives a reload.
-
-**QA bar (agents/qa.md) as checkable statements.**
-1. *Instructions on first play* — the info list states cell-then-number and the clue/player colour
-   split before the first input; every action button carries its shortcut. ✔
-2. *Every implemented feature usable in the browser* — the e2e reaches every one of them (mode tabs,
-   selection, keyboard and pad entry, rejection, mark, hint, pause/resume, mute, clear, restart,
-   persistence, completion) through the visible UI. ✔
-3. *No console errors or warnings* — both passes fail on any `pageerror`, console error or console
-   warning outside the allow-listed GPU/SwiftShader noise, with Low, High and Ultra all rendered. ✔
-4. *Nothing cut off, desktop and mobile* — `frameCamera` guarantees all nine columns fit at any
-   aspect; the ≤700 px layout moves the controls to a scrollable bottom sheet and drops the two
-   optional text blocks. Screenshots are captured at every stage of both passes. ✔
-5. *Play through the whole game* — the desktop pass fills all 81 cells and reaches results. ✔
+`npm run test:browser` (`tools/browser-play.mjs`) serves the packaged folder and plays it in Chrome on
+the GPU (`~/games/tools/gpu-chrome.mjs`) at 1366×768, 390×844 @3 and 844×390 @3: keyboard selection
+and marks, a tile by its accessible target, Hint, a reload that restores the round, pause, the
+Settings dialog, solving by hints to the results, mode switches. Any console error or warning, the
+runtime's error screen or an unfinished round fails it.
 
 ---
 
 ## 15. Asset inventory
 
-| Path | Purpose | Source | Status |
-|---|---|---|---|
-| `assets/sanctuary-backdrop.webp` | Scene background: dusk courtyard, colonnade, still water | FLUX.2 klein, seed 40712, 1536×864 → 1280×720 WebP q80 (13 KB) | generated in this pass; wired as `scene.background` |
-| `assets/courtyard-stone.webp` | Limestone scan multiplied into the board plane material | FLUX.2 klein, seed 40711, 1024² → 768² WebP q80 (59 KB) | generated in this pass; wired as `boardMat.map`, 3×3 repeat |
-| `sfx/place-wood-tap.opus` … `place-glass-tick.opus` (4) | `playPlace` rotation | MOSS-SFX v2.0 | shipped |
-| `sfx/invalid-wood-knock.opus` … `invalid-dice-rattle.opus` (4) | `playInvalid` rotation | MOSS-SFX v2.0 | shipped |
-| `sfx/select-switch-tick.opus` … `select-cork-pop.opus` (4) | `playSelect` rotation | MOSS-SFX v2.0 | shipped |
-| `sfx/solve-bloom-chime.opus`, `sfx/solve-bowl-swell.opus` | `playSolve` completion bloom | MOSS-SFX v2.0 | generated in this pass; wired |
-| `sfx/hint-glass-shimmer.opus` | `playHint` | MOSS-SFX v2.0 | generated in this pass; wired |
-| `sfx/erase-brush-sweep.opus` | `playErase` | MOSS-SFX v2.0 | generated in this pass; wired |
-| `sfx/pause-stone-close.opus`, `sfx/resume-stone-open.opus` | `playPause` / `playResume` | MOSS-SFX v2.0 | generated in this pass; wired |
-| `sfx/mode-cloth-turn.opus` | `playMode` | MOSS-SFX v2.0 | generated in this pass; wired |
-| `sfx/manifest.txt` | Canonical file → event → description → context map | authored | shipped |
-| `sfx/manifest.json` / `manifest.md` | Generator input / readable mirror, kept in sync with `.txt` | authored | shipped |
-| `coverart.png` | 1200×675 platform cover | prior FLUX pass | shipped |
-| `icon.png`, `favicon.svg` | 256² platform icon, tab icon | authored | shipped |
-| `vendor/three/` | Three.js r160 ES module build + same-revision addons | npm `three@0.160.1` | vendored, shipped |
-| — | Hero 3D prop (courtyard lantern beside the board) | TRELLIS | not generated; the Detailed graphics tier builds procedural stone lanterns instead. Loading a GLB needs `GLTFLoader` vendored from the same r160 addons |
-| — | Character animation | Kimodo | not applicable: no humanoid in the game |
-
-Board digits are drawn at runtime into a 128 px canvas per digit (`makeTextSprite`), not shipped as
-image assets, because they must stay crisp at any camera distance and must match the localized font
-stack.
+| Path | Purpose | Source |
+|---|---|---|
+| `assets/sanctuary-backdrop.webp` | Scene background: dusk courtyard, colonnade, still water | FLUX.2 klein, 1280×720 WebP |
+| `assets/courtyard-stone.webp` | Limestone multiplied into the board and plinth | FLUX.2 klein, 768² WebP |
+| `assets/textures/grain.png` | Tile roughness/bump grain (128²) | baked by `tools/bake-textures.mjs` from the browser build's painter |
+| `assets/textures/contact-ao.png` | Contact occlusion overlay (512², alpha) | baked likewise (the old canvas used `filter: blur`) |
+| `assets/ui-style.json` | UI styles | `npm run css` from `tools/ui-style.css` |
+| `sfx/*.opus` (19) | Event clips (§9) | MOSS-SFX v2.0 |
+| `cover.jpg`, `coverart.png`, `icon.png`, `favicon.*` | Platform presentation | prior passes |
 
 ---
 
 ## 16. Known limitations
 
-- **Marks are per-cell, not per-digit.** `N` flags a cell purple; it cannot record "this cell is 3
-  or 7". Serious players will want candidate digits.
-- **The five modes differ only by difficulty.** Learn has no lessons, Journey has no authored
-  progression or mastery stages, Challenge imposes no constraints, and Practice is Learn with a
-  different tab highlighted. The mode tabs currently function as a difficulty selector with five
-  labels.
-- **No undo stack.** Erase and Clear are the only reversals; `Clear` also zeroes the mistake and
-  hint counters and restarts the clock, so it is a soft restart rather than a rewind.
-- **Progress can go backwards.** The bar measures correct cells against the solution, so placing a
-  legal-but-wrong digit does not raise it and erasing a correct one lowers it. This is intentional
-  but reads as a bug on first encounter.
-- **Hints reveal rather than teach.** `H` writes the answer into a cell; it never names the
-  technique that would have found it, which undercuts the Learn mode's premise.
-- **Restoring a round re-derives the puzzle.** `restoreRound` calls `buildPuzzle`, which re-runs
-  generation and the uniqueness-checked removal loop — on Hard this is the slowest thing the game
-  does (hundreds of milliseconds) and it happens before the first paint on reload.
-- **No cap on mistakes and no timer pressure.** Nothing stops a player brute-forcing all nine digits
-  into each cell; the score falls but the round never ends.
-- **The board plane texture is largely hidden.** The 81 tiles cover most of the floor, so the
-  limestone scan reads only at the board's rim.
-- **`package.json` lists `three` (^0.185) as a dependency** that the browser build does not use;
-  the game ships the vendored r160 under `vendor/three/`.
-- **Ambient occlusion is baked, not screen-space.** The r160 GTAO pass produced a large black
-  artefact on this scene, and the board is static, so contact occlusion is baked into the scene
-  instead; it does not react to the lanterns or the selection ring.
+- **Marks are per-cell, not per-digit.**
+- **The five modes differ only by difficulty** (Learn has no lessons, Journey no ladder, Challenge no
+  constraints, Practice equals Learn).
+- **No undo stack;** Clear also zeroes the counters and restarts the clock.
+- **Progress can go backwards** (it measures correct cells against the solution).
+- **Hints reveal rather than teach.**
+- **No cap on mistakes or time.**
+- **Solo leaderboard scores are client-proposed** and range-checked by `score-script.js` (0–100,000),
+  not re-derived on the server from the moves.
+- **Guests' browser-build progress** (their `localStorage`) does not carry over; signed-in players'
+  cloud saves do.
+- **The old Settings › Graphics per-effect overrides** (shadows, bloom, … one by one) are not offered:
+  the runtime's Options choose a graphics level, which picks the look.
+- **The synthesized beeps** the browser build played while a sample was still decoding are gone; the
+  first presses of a session can be silent until the clips load.
 
 ---
 
 ## 17. Design intent not yet implemented
 
-1. **Per-digit pencil notes** — up to nine small candidate digits rendered inside an empty tile,
-   replacing the current single per-cell mark.
-2. **Mode-specific rules** — scripted Learn lessons that require the player to perform each
-   technique, an authored Journey ladder with mastery checks, and Challenge constraints (move caps,
-   speed targets, no-hint runs).
-3. **`prefers-reduced-motion` branch for gameplay feedback** — drop the progress-bar transition and
-   replace the 220 ms rejection flash with a persistent border until the next input (ambient
-   graphics motion already honours it).
-4. **Hero lantern model** — a TRELLIS-generated stone lantern beside the board, which needs a
-   `GLTFLoader` vendored from the same r160 addons as `vendor/three/`.
-
-## Browser interference
-
-`browser-guard.js` (loaded from `index.html`) suppresses browser UI that gets in the way of play: the right-click context menu, the iOS long-press callout, copy / cut / paste, and page text selection. Text fields (inputs, textareas, selects, contenteditable) keep normal selection, context menu and clipboard behaviour.
-
-
-## Sound and frame-rate options
-
-The options panel includes Sound controls for master, music, effects and UI volume, a mute that preserves volume levels, and an Auto or manual concurrent-sound limit (1–64). Changes apply immediately with perceptual volume curves. A shared allocator bounds Web Audio and media playback, including loops and scheduled sources. Graphics includes Auto display refresh or a custom maximum frame rate from 1–1000 FPS; rendering is paced independently of simulation and input. Preferences persist locally, with FPS stored per detected GPU, and reconcile with Starhermit settings when signed in. The controls support keyboard and touch input and the supported English, Spanish, German, French, Portuguese and Italian locales.
+1. **Per-digit pencil notes** inside empty tiles.
+2. **Mode-specific rules** — Learn lessons, a Journey ladder, Challenge constraints.
+3. **Reduced-motion gameplay feedback** — a persistent border instead of the 220 ms flash.
+4. **Hero lantern model** beside the board.
