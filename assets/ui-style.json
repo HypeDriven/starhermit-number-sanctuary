@@ -1,0 +1,377 @@
+{
+  "styles": {
+    ".topbar": {
+      "background": "$bar",
+      "border": {
+        "width": {
+          "bottom": 1
+        },
+        "color": {
+          "bottom": "$line"
+        },
+        "style": "solid"
+      },
+      "radius": 0,
+      "padding": {
+        "top": 10,
+        "end": 18,
+        "bottom": 10,
+        "start": 18
+      }
+    },
+    ".panel": {
+      "background": "#141a20d9",
+      "radius": 8,
+      "padding": {
+        "top": 14,
+        "end": 16,
+        "bottom": 14,
+        "start": 16
+      }
+    },
+    ".overlay": {
+      "background": "#141a20f0",
+      "radius": 10,
+      "padding": {
+        "top": 18,
+        "end": 28,
+        "bottom": 18,
+        "start": 28
+      }
+    },
+    ".dialog-card": {
+      "background": "#141a20f7",
+      "border": {
+        "width": 1,
+        "color": "$line",
+        "style": "solid"
+      },
+      "radius": 10,
+      "shadow": {
+        "y": 12,
+        "blur": 40,
+        "color": "#00000080"
+      },
+      "padding": {
+        "top": 14,
+        "end": 16,
+        "bottom": 14,
+        "start": 16
+      }
+    },
+    ".scrim": {
+      "background": "#080c1099",
+      "radius": 0
+    },
+    ".toast": {
+      "background": "#1f2a33",
+      "border": {
+        "width": 1,
+        "color": "$focus",
+        "style": "solid"
+      },
+      "radius": 10,
+      "padding": {
+        "top": 10,
+        "end": 16,
+        "bottom": 10,
+        "start": 16
+      }
+    },
+    ".bar": {
+      "background": "$line",
+      "radius": 4
+    },
+    ".bar-fill": {
+      "background": "$good",
+      "radius": 4
+    },
+    ".rule": {
+      "background": "$line",
+      "radius": 0
+    },
+    ".title": {
+      "text": {
+        "color": "$text",
+        "size": 20,
+        "weight": "bold",
+        "letterSpacing": 1
+      }
+    },
+    ".panel-h": {
+      "text": {
+        "color": "$text",
+        "size": 16,
+        "weight": "bold"
+      }
+    },
+    ".status-text": {
+      "text": {
+        "color": "$text",
+        "size": 14
+      }
+    },
+    ".readout": {
+      "text": {
+        "color": "$muted",
+        "size": 12
+      }
+    },
+    ".progress-label": {
+      "text": {
+        "color": "$muted",
+        "size": 12
+      }
+    },
+    ".info": {
+      "text": {
+        "color": "$info",
+        "size": 12
+      }
+    },
+    ".overlay-h": {
+      "text": {
+        "color": "#ffffff",
+        "size": 20,
+        "weight": "bold"
+      }
+    },
+    ".score-k": {
+      "text": {
+        "color": "#ffffff",
+        "size": 14
+      }
+    },
+    ".score-total": {
+      "text": {
+        "color": "#ffffff",
+        "size": 14,
+        "weight": "bold"
+      }
+    },
+    ".hint-line": {
+      "text": {
+        "color": "$muted",
+        "size": 13
+      }
+    },
+    ".dialog-h": {
+      "text": {
+        "color": "$text",
+        "size": 18,
+        "weight": "bold"
+      }
+    },
+    ".section-h": {
+      "text": {
+        "color": "$focus",
+        "size": 14,
+        "letterSpacing": 0.5
+      }
+    },
+    ".account-hint": {
+      "text": {
+        "color": "$muted",
+        "size": 13
+      }
+    },
+    ".toast-text": {
+      "text": {
+        "color": "#eef2f5",
+        "size": 14
+      }
+    },
+    ".mode-btn": {
+      "background": "$btn",
+      "radius": 6,
+      "padding": {
+        "top": 6,
+        "end": 14,
+        "bottom": 6,
+        "start": 14
+      },
+      "minHeight": 30,
+      "text": {
+        "color": "$text",
+        "size": 14,
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$btn-hover"
+      },
+      "selected": {
+        "background": "$accent"
+      }
+    },
+    ".settings-btn": {
+      "background": "$act",
+      "border": {
+        "width": 1,
+        "color": "$btn-hover",
+        "style": "solid"
+      },
+      "radius": 6,
+      "padding": {
+        "top": 6,
+        "end": 12,
+        "bottom": 6,
+        "start": 12
+      },
+      "minHeight": 30,
+      "text": {
+        "color": "$text",
+        "size": 13,
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$btn"
+      }
+    },
+    ".pad-btn": {
+      "background": "$btn",
+      "radius": 6,
+      "padding": 0,
+      "minHeight": 40,
+      "text": {
+        "color": "$text",
+        "size": 18,
+        "weight": "bold",
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$btn-hover"
+      },
+      "selected": {
+        "border": {
+          "width": 2,
+          "color": "$focus",
+          "style": "solid"
+        }
+      },
+      "disabled": {
+        "opacity": 0.45
+      }
+    },
+    ".pad-dim": {
+      "background": "$btn",
+      "radius": 6,
+      "padding": 0,
+      "minHeight": 40,
+      "opacity": 0.45,
+      "text": {
+        "color": "$text",
+        "size": 18,
+        "weight": "bold",
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$btn-hover"
+      },
+      "selected": {
+        "border": {
+          "width": 2,
+          "color": "$focus",
+          "style": "solid"
+        }
+      }
+    },
+    ".pad-wide": {
+      "background": "$btn",
+      "radius": 6,
+      "padding": 0,
+      "minHeight": 40,
+      "text": {
+        "color": "$text",
+        "size": 14,
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$btn-hover"
+      }
+    },
+    ".action-btn": {
+      "background": "$act",
+      "radius": 6,
+      "padding": {
+        "top": 4,
+        "end": 8,
+        "bottom": 4,
+        "start": 8
+      },
+      "minHeight": 34,
+      "text": {
+        "color": "$text",
+        "size": 12,
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$btn"
+      },
+      "selected": {
+        "background": "$pressed"
+      }
+    },
+    ".overlay-btn": {
+      "background": "$act",
+      "radius": 6,
+      "padding": {
+        "top": 6,
+        "end": 18,
+        "bottom": 6,
+        "start": 18
+      },
+      "minHeight": 34,
+      "text": {
+        "color": "$text",
+        "size": 12,
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$btn"
+      }
+    },
+    ".account-btn": {
+      "background": "$act",
+      "radius": 6,
+      "padding": {
+        "top": 8,
+        "end": 16,
+        "bottom": 8,
+        "start": 16
+      },
+      "minHeight": 44,
+      "text": {
+        "color": "$text",
+        "size": 14,
+        "align": "center"
+      },
+      "hovered": {
+        "background": "$btn"
+      }
+    },
+    ".pad-wide-text": {
+      "text": {
+        "color": "$text",
+        "size": 14
+      }
+    }
+  },
+  "animations": {},
+  "tokens": {
+    "accent": "#c05621",
+    "act": "#2d3742",
+    "bar": "#232b33",
+    "bg": "#1a2026",
+    "btn": "#3a4550",
+    "btn-hover": "#4a5763",
+    "focus": "#f6e05e",
+    "good": "#2f855a",
+    "info": "#cfd8e0",
+    "line": "#3a4550",
+    "muted": "#9aa7b4",
+    "pressed": "#6b46c1",
+    "text": "#e8edf2"
+  },
+  "layouts": {},
+  "dropped": []
+}

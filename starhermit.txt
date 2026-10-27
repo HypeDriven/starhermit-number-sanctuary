@@ -1,9 +1,25 @@
 name=Number Sanctuary
 description=Solve Sudoku puzzles by filling a nine-by-nine grid so each row, column, and box contains every digit once.
-launch=index.html
 owner=2712e04e-461b-4d23-81ae-e40b429128a8
 server=score-script.js
 cover=cover.jpg
+
+# StarHermit engine script game: one package, played natively by the
+# StarHermit client and in browsers by the engine's web runtime. Browsers open
+# launch=index.html, the loader `npm run package` writes (it pins the engine
+# on wiki.starhermit.com by hash; never edit it). Re-run `npm run package`
+# after every change and commit index.html + starhermit-files.json.
+launch=index.html
+engine.api=1
+engine.entry=native/main.ts
+engine.version=1.19.1
+engine.minor=20
+engine.capabilities=platform,storage,clipboard
+
+# Keyboard controls (players rebind keys and pads in the runtime's Options).
+# The board is also played with the pointer or touch: tap a tile to select
+# it, then a digit on the number pad; every action also has a button.
+engine.group.digit1=Digits
 control.digit1=Digit1+Numpad1 | Enter 1
 control.digit2=Digit2+Numpad2 | Enter 2
 control.digit3=Digit3+Numpad3 | Enter 3
@@ -14,10 +30,15 @@ control.digit7=Digit7+Numpad7 | Enter 7
 control.digit8=Digit8+Numpad8 | Enter 8
 control.digit9=Digit9+Numpad9 | Enter 9
 control.erase=Backspace+Delete+Digit0+Numpad0 | Erase cell
+engine.group.up=Selection
 control.up=ArrowUp+KeyW | Move up
 control.down=ArrowDown+KeyS | Move down
 control.left=ArrowLeft+KeyA | Move left
 control.right=ArrowRight+KeyD | Move right
+control.prevdigit=BracketLeft | Previous pad digit
+control.nextdigit=BracketRight | Next pad digit
+control.place=Enter | Place the pad digit
+engine.group.note=Round
 control.note=KeyN+KeyU | Toggle pencil marks
 control.hint=KeyH | Hint
 control.clear=KeyC | Clear board
@@ -25,3 +46,23 @@ control.restart=KeyR | Restart / new round
 control.pause=KeyP | Pause / resume
 control.mute=KeyM | Mute
 control.menu=Escape | Pause
+
+# Gamepad defaults: the D-pad or left stick moves the selection, the
+# shoulders choose the number pad's digit and South places it, West erases,
+# North toggles the mark, Select asks for a hint, Start pauses (East too),
+# the triggers clear and restart, the right stick press mutes.
+engine.gamepad.up=DpadUp+LeftStickUp
+engine.gamepad.down=DpadDown+LeftStickDown
+engine.gamepad.left=DpadLeft+LeftStickLeft
+engine.gamepad.right=DpadRight+LeftStickRight
+engine.gamepad.prevdigit=LeftShoulder
+engine.gamepad.nextdigit=RightShoulder
+engine.gamepad.place=South
+engine.gamepad.erase=West
+engine.gamepad.note=North
+engine.gamepad.hint=Select
+engine.gamepad.clear=LeftTrigger
+engine.gamepad.restart=RightTrigger
+engine.gamepad.pause=Start
+engine.gamepad.menu=East
+engine.gamepad.mute=RightStickPress
