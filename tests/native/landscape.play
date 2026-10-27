@@ -1,0 +1,32 @@
+# Phone landscape (DPR 3): slim side panels with the scrolling controls; keyboard play to a Challenge solve.
+# viewport 844x390@3
+until 300 Mistakes 0
+frames 150
+save landscape-start
+touch =Challenge
+frames 10
+expect Hard
+key ArrowDown 1
+frames 3
+key KeyN 1
+frames 3
+key KeyN 1
+frames 3
+key Digit0 1
+frames 3
+repeat 900 until Sanctuary complete
+  key KeyH 1
+  frames 1
+end
+frames 20
+expect Total
+save landscape-results
+key KeyR 1
+frames 5
+key ArrowUp 1
+frames 2
+key BracketRight 1
+frames 2
+key Enter 1
+frames 5
+expect Hard

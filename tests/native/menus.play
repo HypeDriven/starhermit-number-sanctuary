@@ -1,0 +1,58 @@
+# Desktop: the opening Learn grid, keyboard selection, a mark, pause and resume (key and button), the Settings
+# dialog (account section, Options button, Close), mute, a mode switch with restart and clear, then a solve by
+# hints to the results breakdown and a new round.
+# viewport 1280x800@1
+until 300 Mistakes 0
+frames 150
+save menus-start
+expect No cell selected.
+key ArrowUp 1
+frames 3
+expect Cell row 5, column 5
+key ArrowRight 1
+frames 3
+expect Cell row 5, column 6
+key KeyP 1
+frames 5
+until 30 Press P or click Resume to continue.
+save menus-paused
+click =Resume
+frames 10
+key KeyP 1
+frames 5
+click =Settings
+until 60 Sign in with StarHermit
+expect Options: graphics, sound, language, controls
+save menus-settings
+click =Close
+frames 10
+click =Resume
+frames 10
+click Mute (M)
+frames 5
+expect Unmute (M)
+key KeyM 1
+frames 5
+expect Mute (M)
+click =Journey
+frames 10
+expect Medium
+click Restart (R)
+frames 10
+expect Medium
+repeat 600 until Sanctuary complete
+  key KeyH 1
+  frames 1
+end
+frames 20
+expect Hints (
+expect Total
+expect Press R for a new round.
+expect Best
+save menus-results
+key KeyR 1
+frames 10
+expect Medium
+key KeyC 1
+frames 5
+expect Score 0

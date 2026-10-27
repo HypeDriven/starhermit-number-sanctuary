@@ -1,0 +1,102 @@
+/* Number Sanctuary — the browser build's style.css rewritten class-based for
+   the engine's UI (`npm run css` converts it into assets/ui-style.json).
+   Element and id selectors, attribute selectors and @media do not convert:
+   every widget names its classes, and the breakpoints (≤ 700 px wide: the
+   stacked top bar, the status strip and the bottom controls; ≤ 520 px tall
+   landscape: the slim side panels) are layouts picked in native/main.ts,
+   which also sizes text for them inline. The Settings dialog's Graphics
+   section, the frame-rate readout and ui-scale.js are the runtime's Options,
+   frame-rate readout and interface size now. */
+
+:root {
+  --bg: #1a2026;
+  --bar: #232b33;
+  --line: #3a4550;
+  --text: #e8edf2;
+  --muted: #9aa7b4;
+  --info: #cfd8e0;
+  --btn: #3a4550;
+  --btn-hover: #4a5763;
+  --act: #2d3742;
+  --accent: #c05621;
+  --pressed: #6b46c1;
+  --focus: #f6e05e;
+  --good: #2f855a;
+}
+
+* { box-sizing: border-box; }
+
+/* ------------------------------------------------------------- surfaces */
+.topbar { background: var(--bar); border-bottom: 1px solid var(--line); border-radius: 0; padding: 10px 18px; }
+.panel { background: #141a20d9; border-radius: 8px; padding: 14px 16px; }
+.overlay { background: #141a20f0; border-radius: 10px; padding: 18px 28px; }
+.dialog-card { background: #141a20f7; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; box-shadow: 0 12px 40px #00000080; }
+.scrim { background: #080c1099; border-radius: 0; }
+.toast { background: #1f2a33; border: 1px solid var(--focus); border-radius: 10px; padding: 10px 16px; }
+.bar { background: var(--line); border-radius: 4px; }
+.bar-fill { background: var(--good); border-radius: 4px; }
+.rule { background: var(--line); border-radius: 0; }
+
+/* ------------------------------------------------------------- text */
+.title { color: var(--text); font-size: 20px; font-weight: bold; letter-spacing: 1px; }
+.panel-h { color: var(--text); font-size: 16px; font-weight: bold; }
+.status-text { color: var(--text); font-size: 14px; }
+.readout { color: var(--muted); font-size: 12px; }
+.progress-label { color: var(--muted); font-size: 12px; }
+.info { color: var(--info); font-size: 12px; }
+.overlay-h { color: #ffffff; font-size: 20px; font-weight: bold; }
+.score-k { color: #ffffff; font-size: 14px; }
+.score-total { color: #ffffff; font-size: 14px; font-weight: bold; }
+.hint-line { color: var(--muted); font-size: 13px; }
+.dialog-h { color: var(--text); font-size: 18px; font-weight: bold; }
+.section-h { color: var(--focus); font-size: 14px; letter-spacing: 0.5px; }
+.account-hint { color: var(--muted); font-size: 13px; }
+.toast-text { color: #eef2f5; font-size: 14px; }
+
+/* ------------------------------------------------------------- buttons */
+.mode-btn {
+  min-height: 30px; padding: 6px 14px; border-radius: 6px;
+  background: var(--btn); color: var(--text); font-size: 14px; text-align: center;
+}
+.mode-btn:hover { background: var(--btn-hover); }
+.mode-btn.active { background: var(--accent); }
+.settings-btn {
+  min-height: 30px; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--btn-hover);
+  background: var(--act); color: var(--text); font-size: 13px; text-align: center;
+}
+.settings-btn:hover { background: var(--btn); }
+.pad-btn {
+  min-height: 40px; border-radius: 6px; padding: 0;
+  background: var(--btn); color: var(--text); font-size: 18px; font-weight: bold; text-align: center;
+}
+.pad-btn:hover { background: var(--btn-hover); }
+.pad-btn.active { border: 2px solid var(--focus); }
+.pad-btn:disabled { opacity: 0.45; }
+.pad-dim {
+  min-height: 40px; border-radius: 6px; padding: 0; opacity: 0.45;
+  background: var(--btn); color: var(--text); font-size: 18px; font-weight: bold; text-align: center;
+}
+.pad-dim:hover { background: var(--btn-hover); }
+.pad-dim.active { border: 2px solid var(--focus); }
+.pad-wide {
+  min-height: 40px; border-radius: 6px; padding: 0;
+  background: var(--btn); color: var(--text); font-size: 14px; text-align: center;
+}
+.pad-wide:hover { background: var(--btn-hover); }
+.action-btn {
+  min-height: 34px; border-radius: 6px; padding: 4px 8px;
+  background: var(--act); color: var(--text); font-size: 12px; text-align: center;
+}
+.action-btn:hover { background: var(--btn); }
+.action-btn.active { background: var(--pressed); }
+.overlay-btn {
+  min-height: 34px; border-radius: 6px; padding: 6px 18px;
+  background: var(--act); color: var(--text); font-size: 12px; text-align: center;
+}
+.overlay-btn:hover { background: var(--btn); }
+.account-btn {
+  min-height: 44px; border-radius: 6px; padding: 8px 16px;
+  background: var(--act); color: var(--text); font-size: 14px; text-align: center;
+}
+.account-btn:hover { background: var(--btn); }
+.pad-wide-text { color: var(--text); font-size: 14px; }
