@@ -9,13 +9,12 @@
 // the fireflies drifting round the plinth, the dusk backdrop image, and the
 // camera framed into the part of the window the HUD panels leave free.
 //
-// From three.js r160: light intensities are ÷ π (the engine's convention, as
-// r155+'s physically based lights); the RoomEnvironment reflections are each
-// material's own envMap with the old envMapIntensity (scene.environment at
-// minor 20 ignores per-material intensity); the post chain (UnrealBloomPass
+// From three.js r160 (engine.minor 26): light intensities and the fitted
+// shadow box as the page set them; the RoomEnvironment reflections are each
+// material's own envMap with the old envMapIntensity (scene.environment
+// ignores per-material intensity); the post chain (UnrealBloomPass
 // 0.75 / 0.55 / 0.9 on the linear frame, the display-space GradeShader after
 // the output, FXAA / SMAA / MSAA) is renderer.bloom / grade / antialias; the
-// key light's fitted shadow box is the engine's shadow `distance`; the
 // procedural grain and contact-occlusion canvases are baked images
 // (tools/bake-textures.mjs; the occlusion's alphaMap becomes the alpha of a
 // black map). The digits were sprites in a second scene drawn after the post
@@ -27,7 +26,7 @@ import * as draw from "starhermit:draw";
 import { OffscreenCanvas } from "starhermit:canvas";
 import {
   ACESFilmicToneMapping, AdditiveBlending, BoxGeometry, BufferAttribute, BufferGeometry, CanvasTexture, Color, ConeGeometry,
-  DirectionalLight, DoubleSide, Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial,
+  DirectionalLight, DoubleSide, OrthographicCamera, Group, HemisphereLight, Mesh, MeshBasicMaterial, MeshLambertMaterial, MeshPhysicalMaterial,
   MeshStandardMaterial, PerspectiveCamera, PlaneGeometry, PMREMGenerator, PointLight, Points, PointsMaterial, Raycaster,
   RepeatWrapping, RingGeometry, RoomEnvironment, RoundedBoxGeometry, ShadowMaterial, SphereGeometry, Sprite, SpriteMaterial,
   SRGBColorSpace, TextureLoader, Vector2, Vector3, renderer, scene, type Texture,
@@ -56,15 +55,19 @@ renderer.camera = camera;
 scene.background = new Color(0x1a2026);
 
 // lighting: cool dusk sky fill, one warm low key light with fitted shadows, and a faint cool rim from behind
-const hemi = new HemisphereLight(0xb4c8ea, 0x2a2119, 1.25 / PI);
+const hemi = new HemisphereLight(0xb4c8ea, 0x2a2119, 1.25);
 scene.add(hemi);
-const keyLight = new DirectionalLight(0xffe2bd, 1.8 / PI);
+const keyLight = new DirectionalLight(0xffe2bd, 1.8);
 keyLight.position.set(-5, 11, 7);
+const shadowExt = BOARD_SPAN / 2 + 1.2;
+const shadowCam = keyLight.shadow.camera as OrthographicCamera;
+Object.assign(shadowCam, { left: -shadowExt, right: shadowExt, top: shadowExt, bottom: -shadowExt, near: 4, far: 26 });
+shadowCam.updateProjectionMatrix();
 keyLight.shadow.bias = -0.0004;
+keyLight.shadow.normalBias = 0.02;
 keyLight.shadow.radius = 3;
-keyLight.shadow.distance = 40;
 scene.add(keyLight, keyLight.target);
-const rimLight = new DirectionalLight(0x8fb2ff, 0.55 / PI);
+const rimLight = new DirectionalLight(0x8fb2ff, 0.55);
 rimLight.position.set(3, 5, -9);
 scene.add(rimLight);
 
@@ -154,7 +157,7 @@ const haloMat = new SpriteMaterial({
 });
 const lanternFlames: { mesh: Mesh; phase: number }[] = [];
 const lanternLights: { light: PointLight; phase: number }[] = [];
-const LANTERN_BASE = 5 / PI;
+const LANTERN_BASE = 5;
 for (const [x, z] of [[-lc, -lc], [lc, -lc], [-lc, lc], [lc, lc]] as const) {
   const post = new Mesh(postGeom, stone);
   post.position.set(x, 0.21, z);
@@ -356,7 +359,7 @@ export function applyLook(next: Look): void {
     m.envMap = next.reflections ? envTex : null;
     m.envMapIntensity = k;
   }
-  hemi.intensity = (next.reflections ? 0.75 : 1.25) / PI;
+  hemi.intensity = next.reflections ? 0.75 : 1.25;
 
   fireflies.visible = next.particles !== "off";
   ffGeom.setDrawRange(0, fireflyCount(next));
