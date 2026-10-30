@@ -365,7 +365,8 @@ export function applyLook(next: Look): void {
   ffGeom.setDrawRange(0, fireflyCount(next));
 
   // UnrealBloomPass(0.75, 0.55, 0.9) on the linear frame: the lantern flames, fireflies and the ring bloom.
-  renderer.bloom = next.bloom ? { strength: 0.4, radius: 0.55, threshold: 0.9, resolution: b.bloomRes } : null;
+  // The page's three r160 UnrealBloomPass strength 0.75 squared: minor 29 bloom follows r185 (≈2.9× the light).
+  renderer.bloom = next.bloom ? { strength: 0.56, radius: 0.55, threshold: 0.9, resolution: b.bloomRes } : null;
   // GradeShader after the output (display space): a 0.22 S-curve, saturation 1.06, cool shadows / warm highlights,
   // the 0.26 vignette.
   renderer.grade = next.grade ? {
