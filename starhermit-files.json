@@ -8,7 +8,7 @@
     "cover.jpg": {"sha256": "063376823149ccbbb5650d88e444e75cf28cab75bac7fe370bef1246ce5c592e", "size": 273095},
     "favicon.png": {"sha256": "487c3041bd006d64963dc6a121ffefac6e8338cb2b8ac40a1e6625aeac725c35", "size": 134935},
     "icon.png": {"sha256": "1b5b8ca08d3f413d4eccd38fa4becfebee969351dd206848d1c6b7f1a0a21491", "size": 5744},
-    "index.html": {"sha256": "1ccd2adacd6ab95076b04cdc34244f9002a29b6cfc9d4b7c355c6c5fb3e8cca2", "size": 1791},
+    "index.html": {"sha256": "201d2e88e061480d3c0de1d21fd87dccc23fb021d6bf6eb43416c9f57c35bb59", "size": 1791},
     "lang/strings.js": {"sha256": "4d5e20a077a1f809baa0c0406af3e33c2a0b00667becbf2c6d996a674d420410", "size": 23691},
     "native/audio.ts": {"sha256": "a06d1a2b63863a88a89f6cf163af60f179f8ac4d266f8a8288533bf289c43ba5", "size": 2689},
     "native/game.ts": {"sha256": "b02db9a849b3ace077644a2215896a567b9bd14eb51faaf93671d0e924bd9e82", "size": 1981},
@@ -16,7 +16,7 @@
     "native/main.ts": {"sha256": "e7ba03db856a3ccf9fd23960a9d7089af5ed275421177fb21c122e68d5090418", "size": 31517},
     "native/platform.ts": {"sha256": "9446c209e28f984cb706eb6a3eb65b24d88deb8f2111e3b047ac3fb8c8127c00", "size": 8998},
     "native/quality.ts": {"sha256": "edebaf7aae41c5bcd504cc99c42f29900dbcc84d6e58893317f3f71e0a6ee06e", "size": 3705},
-    "native/render.ts": {"sha256": "71c26ecc86975fbcfe1bd9178411a841a63e7f82d5e1e3d8479e8073dc6b19d8", "size": 23791},
+    "native/render.ts": {"sha256": "e69ad168c8375afedf90004d00472307067002ebe88959fdef987bef7758cc0c", "size": 23823},
     "native/style.ts": {"sha256": "75f31d0228cb776851bd2b97a08c70267965caaf02d66c03d45232d598950202", "size": 1674},
     "rules.js": {"sha256": "9bc3a8779f13c5237e217f52bd7eff9fda208c95dc8502bc475596e5e8c03008", "size": 6218},
     "score-script.js": {"sha256": "4133359e8234cac920651c89f79485aa401cdca970720662e50150de4431f600", "size": 2487},
@@ -40,7 +40,7 @@
     "sfx/solve-bloom-chime.opus": {"sha256": "0f76a4bba316eb6ea01c5ac59260531c9de1b7ccc1409f6d35e1491f1e54f349", "size": 24680},
     "sfx/solve-bowl-swell.opus": {"sha256": "f5dd5acd6df0b2ea69f92657e81c8142253110845fd0052a54eedba47535577e", "size": 26380},
     "src/round.js": {"sha256": "31d9c49c23d46b51f524a3588a34ae74b3ff61f8780efaa9f1b6777b74ccfcf3", "size": 12080},
-    "starhermit.txt": {"sha256": "4cebba7b5b69ce3bcc1924c1072aebcf0cac7efbcb67133af5fb23b25b98c2a7", "size": 2782}
+    "starhermit.txt": {"sha256": "c276ca6796b038736b2ba640e465477ad2c75b670b34dce853de0fb2d375b0c6", "size": 2782}
   },
   "excluded": ["LICENSE.md", "coverart.png", "favicon.svg", "node_modules/", "package-lock.json", "package.json", "server.js", "sfx/manifest.json", "sfx/manifest.md", "sfx/manifest.txt", "spec.md", "tests/", "tools/", "tsconfig.json"],
   "format": 1

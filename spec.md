@@ -16,7 +16,7 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | Players | 1; personal bests per difficulty, and a high-score leaderboard for signed-in players |
 | Session length | 4–20 min per grid (Easy ≈ 4–8 min, Hard ≈ 12–25 min); resumable, so a session can be one cell long |
 | Platforms | StarHermit engine script game: natively in the StarHermit client, in browsers through the engine's web runtime; desktop and phones, portrait and landscape |
-| Engine | StarHermit engine 1.27.0, host API 1.29 (`starhermit.txt`: `engine.version=1.27.0`, `engine.minor=29`, capabilities `platform, storage, clipboard`) |
+| Engine | StarHermit engine 1.28.0, host API 1.30 (`starhermit.txt`: `engine.version=1.28.0`, `engine.minor=30`, capabilities `platform, storage, clipboard`) |
 | Rendering | `starhermit:scene` (three.js r185-parity scene graph) for the courtyard; `starhermit:ui` for the top bar, panels, overlays and dialog; `starhermit:draw` for the board digits |
 | Persistence | The engine's `saves` store (device + the player's cloud slot); the Mute choice in the engine's game `settings` |
 
@@ -360,8 +360,8 @@ its placeholders, and that no row is unused.
 ## 12. StarHermit integration
 
 - **Manifest:** `name`, `description`, `owner`, `server=score-script.js`, `cover=cover.jpg`,
-  `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.27.0`,
-  `engine.minor=29`, `engine.capabilities=platform,storage,clipboard`, the actions and pad defaults.
+  `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.28.0`,
+  `engine.minor=30`, `engine.capabilities=platform,storage,clipboard`, the actions and pad defaults.
 - **Player:** `player()`; signed in from the first frame in the client, or after the runtime's sign-in
   (Settings › Sign in). The status panel shows the display name and the save state (*Saving to cloud…*
   / *Cloud save synced* / *Cloud sync failed*). Signing out shows a toast; play continues locally.
