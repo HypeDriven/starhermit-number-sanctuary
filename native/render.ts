@@ -333,7 +333,7 @@ export function applyLook(next: Look): void {
   const shadows = next.shadows > 0;
   renderer.shadowMap.enabled = shadows;
   keyLight.castShadow = shadows;
-  if (shadows) keyLight.shadow.mapSize = next.shadows;
+  if (shadows) keyLight.shadow.mapSize = next.shadows; // the level's size: at this minor the engine keeps what the game sets
   shadowCatcher.visible = shadows;
 
   const detailed = next.detailed;
@@ -366,7 +366,7 @@ export function applyLook(next: Look): void {
 
   // UnrealBloomPass(0.75, 0.55, 0.9) on the linear frame: the lantern flames, fireflies and the ring bloom.
   // main.js: three r160 UnrealBloomPass(0.75, 0.55, 0.9), drawn by the r160 bloom model at the page's strength.
-  renderer.bloom = next.bloom ? { model: "r160", strength: 0.75, radius: 0.55, threshold: 0.9, resolution: b.bloomRes } : null;
+  renderer.bloom = next.bloom === null ? null : { model: "r160", strength: 0.75, radius: 0.55, threshold: 0.9, resolution: next.bloom };
   // GradeShader after the output (display space): a 0.22 S-curve, saturation 1.06, cool shadows / warm highlights,
   // the 0.26 vignette.
   renderer.grade = next.grade ? {

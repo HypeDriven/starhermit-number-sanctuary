@@ -1,0 +1,11 @@
+# Tier bench: the opening grid on the plinth, three hints filling tiles, the fireflies and lanterns running.
+until 300 Mistakes 0
+frames 120
+measure start
+key KeyH 1
+frames 200
+key KeyH 1
+frames 200
+key KeyH 1
+frames 200
+measure stop

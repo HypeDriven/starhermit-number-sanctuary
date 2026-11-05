@@ -29,7 +29,7 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | `native/render.ts` | The courtyard scene (tiles, board/plinth, lanterns, fireflies, ring, backdrop), tile states and the refused-digit flash, the graphics look per level (shadows, detail, shading, baked occlusion, reflections, bloom, grade, anti-aliasing), camera framing (`frameCamera`), picking, tile rectangles, the digits on the 2D overlay. |
 | `native/quality.ts` | The four looks (the browser build's gfx.js presets and budgets) keyed by the runtime's quality tier and level index. |
 | `native/platform.ts` | Save document (load, save, conflict merge, foreign migration of the browser build's cloud save), the Mute setting and legacy settings migration, player/sync line, invite link, platform clock, leaderboard posting through `score-script.js`. |
-| `native/audio.ts` | The authored one-shots per event with round-robin rotation, loaded one at a time once the mixer runs. |
+| `native/audio.ts` | The authored one-shots per event with round-robin rotation, all loaded on start. |
 | `native/i18n.ts` | `T(key, vars)` over `lang/strings.js` in the runtime's interface language. |
 | `native/style.ts` | Registers `assets/ui-style.json`, the theme, focus ring and dialog look. |
 | `native/game.ts` | Typed facade over `src/round.js`. |
@@ -286,14 +286,14 @@ convention). The look follows the runtime's graphics level (Options › Graphics
 the runtime owns render scale, pixel-ratio cap, adaptive resolution, the frame-rate limit and its
 readout):
 
-| Tier | Shadows | Baked AO | Bloom | Grade | AA | Reflections | Fireflies | Detail | Tile shading |
-|---|---|---|---|---|---|---|---|---|---|
-| Low | off | off | off | off | MSAA | off | off | plain board | Lambert |
-| Balanced | 1024² | on | on | on | FXAA | on | ⅓ of 80 | plinth + lanterns | Standard satin |
-| High | 2048² | on | on | on | SMAA | on | 110 | + 2 lantern lights | Physical clear-coat glaze |
-| Ultra | 4096² | high | on | on | MSAA | on | 160 | + 2 lantern lights | as High, 256 px digits |
+| Tier | Baked AO | Reflections | Fireflies | Detail | Tile shading |
+|---|---|---|---|---|---|---|
+| Low | off | off | off | plain board | Lambert |
+| Balanced | on | on | ⅓ of 80 | plinth + lanterns | Standard satin |
+| High | on | on | 110 | + 2 lantern lights | Physical clear-coat glaze |
+| Ultra | high | on | 160 | + 2 lantern lights | as High, 256 px digits |
 
-Fireflies scale up within a tier with the level index (≤ 2×, at most 320). Detail: Plain is boxes on a
+Shadows and their map size, bloom, grade and anti-aliasing are the engine's per level (`levelSettings()`). Fireflies follow the level's particle budget against the tier's anchor level (≤ 2×, at most 320). Detail: Plain is boxes on a
 flat stone plane; Detailed is rounded tiles with a finish by state (clues glazed, player digits satin,
 open cells matte), grain in roughness and bump, a limestone plinth with a soft contact shadow and a
 shadow-catching ground, and four stone lanterns. Baked contact occlusion darkens the grout and rim
@@ -310,8 +310,7 @@ contrast 0.11 (the old 0.22 S-curve), saturation 1.06, cool shadows / warm highl
 Object sounds, not game sounds: wood, stone, glass, brass, cloth, felt; no music or ambience bed. The
 clips play on the runtime's *effects* bus (Options › Audio owns volumes, mute and the voice limit);
 the game's Mute (M) silences its effects on top and is remembered (game setting `muted`, synced with
-the account). Clips load once the mixer runs (natively at once, in browsers after the first press),
-one at a time; an event whose clip is still loading is silent. Place, invalid and select rotate
+the account). Every clip loads on start; an event whose clip is still loading is silent. Place, invalid and select rotate
 through four clips each.
 
 | Event | Files | When |

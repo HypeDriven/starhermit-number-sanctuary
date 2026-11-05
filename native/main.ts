@@ -16,7 +16,7 @@
 // round runs unpaused, so a hidden window or slow frames never cost time.
 import "./i18n.ts";
 import {
-  clipboard, frame, onFixedUpdate, onOverlay, onQuit, onStart, onSuspend, onUpdate, openMenu,
+  clipboard, frame, levelSettings, onFixedUpdate, onOverlay, onQuit, onStart, onSuspend, onUpdate, openMenu,
 } from "starhermit:engine";
 import { bindingLabel, onAction, onPointerButton, onTouch, type ActionEvent } from "starhermit:input";
 import * as draw from "starhermit:draw";
@@ -570,10 +570,10 @@ function insideHud(x: number, y: number): boolean {
 let lookKey = "";
 function applyLook(): void {
   const f = frame();
-  const key = `${f.quality}:${f.levelIndex}`;
+  const key = f.level;
   if (key === lookKey) return;
   lookKey = key;
-  render.applyLook(lookFor(f.quality, f.levelIndex));
+  render.applyLook(lookFor(levelSettings(f.level)));
 }
 
 /** A document from elsewhere (another device, the browser build's cloud save): bests always merge; its round
@@ -597,6 +597,7 @@ function adopt(doc: Doc): boolean {
 }
 
 onStart(() => {
+  audio.loadSfx();
   initStyles();
   const doc = platform.loadDoc();
   best = doc.best;
@@ -625,7 +626,6 @@ onQuit(() => platform.saveDoc());
 onUpdate((dt) => {
   const f = frame();
   applyLook();
-  audio.update();
   const L = layoutNow();
   panelRects = [];
   topBar(L);
