@@ -22,6 +22,7 @@ import { bindingLabel, onAction, onPointerButton, onTouch, type ActionEvent } fr
 import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
 import { requestSignIn } from "starhermit:platform";
+import { setMuted } from "starhermit:audio";
 import * as audio from "./audio.ts";
 import { Game, type Doc, type Mode, type Round, type RoundEvent } from "./game.ts";
 import { T } from "./i18n.ts";
@@ -45,11 +46,15 @@ let lbLine: [string, Record<string, string | number>?] | null = null;
 let postedSeed: string | null = null;
 let padDigit = 5;
 let padActive = false; // the gamepad's chosen pad digit shows once it is used
-let toast: { text: string; until: number } | null = null;
+let toast: ui.Toast | null = null;
 let shownProgress = 0;
 
 function nowSec(): number { return frame().time; }
-function showToast(text: string): void { toast = { text, until: nowSec() + 3.2 }; }
+/** One at a time, 3.2 s, at the bottom centre; a press still reaches what lies under it. */
+function showToast(text: string): void {
+  toast?.dismiss();
+  toast = ui.toast!(text, { duration: 3.2, style: ["toast", "toast-text"], dismissible: false });
+}
 
 function buildDoc(): Doc { return { best, round: Game.roundDoc(round) }; }
 function boardView(): render.BoardView { return round; }
@@ -92,9 +97,9 @@ function finishRound(): void {
   const id = `${round.mode}:${round.puzzleSeed}:${round.moves}:${round.hints}:${round.mistakes}`;
   if (round.mode !== "learn" && platform.signedIn() && postedSeed !== id) {
     postedSeed = id;
-    lbLine = ["lb.posting"];
+    lbLine = ["starhermit.leaderboardPosting"];
     void platform.postLeaderboard(Math.max(0, p.total)).then((r) => {
-      lbLine = !r.posted ? ["lb.notPosted"] : r.rank ? ["lb.rank", { rank: r.rank }] : ["lb.posted"];
+      lbLine = !r.posted ? ["starhermit.leaderboardNotPosted"] : r.rank ? ["starhermit.leaderboardRank", { rank: r.rank }] : ["starhermit.leaderboardPosted"];
     });
   }
 }
@@ -507,9 +512,9 @@ function settingsDialog(L: Layout): void {
         ui.style("section-h").heading(T("account.title"));
         if (!platform.signedIn()) {
           para(T("account.signInHint"), inner, "account-hint");
-          button(T("account.signIn"), "account-btn", () => { settingsOpen = false; void requestSignIn().catch(() => undefined); }, { id: "sign-in" });
+          button(T("starhermit.signIn"), "account-btn", () => { settingsOpen = false; void requestSignIn().catch(() => undefined); }, { id: "sign-in" });
         } else {
-          button(T("account.invite"), "account-btn", copyInvite, { id: "invite" });
+          button(T("starhermit.invite"), "account-btn", copyInvite, { id: "invite" });
         }
       }, { spacing: 6, padding: { top: 6 } });
       ui.widget("settings-rule", { role: "none", size: { width: inner, height: 1 }, draw: (rr) => draw.box(rr.x, rr.y, rr.width, 1, "rule") });
@@ -521,18 +526,10 @@ function settingsDialog(L: Layout): void {
 }
 function copyInvite(): void {
   const link = platform.inviteLink();
-  if (!link) { showToast(T("account.copyFailed")); return; }
-  try { clipboard.writeText(link); showToast(T("account.copied")); } catch { showToast(T("account.copyFailed")); }
+  if (!link) { showToast(T("starhermit.inviteFailed")); return; }
+  try { clipboard.writeText(link); showToast(T("starhermit.inviteCopied")); } catch { showToast(T("starhermit.inviteFailed")); }
 }
 
-function toasts(L: Layout): void {
-  if (!toast) return;
-  if (nowSec() > toast.until) { toast = null; return; }
-  const text = toast.text;
-  ui.place("toast", { anchor: "bottom", y: 16 }, () => {
-    para(text, Math.min(420, L.lw * 0.9) - 34, "toast-text");
-  }, { style: "toast", align: "center" });
-}
 
 /** The 81 tiles as accessible buttons over the board (screen readers, play scripts, browser automation). */
 function boardTargets(): void {
@@ -606,10 +603,10 @@ onStart(() => {
   // A solved round restores with its results and frozen score (not posted again).
   if (round.gameOver) postedSeed = `${round.mode}:${round.puzzleSeed}:${round.moves}:${round.hints}:${round.mistakes}`;
   platform.bind(buildDoc, adopt);
-  platform.onMutedChange((m) => audio.setMuted(m));
-  platform.onSignedOut(() => showToast(T("account.signedOut")));
+  platform.onMutedChange((m) => setMuted(m));
+  platform.onSignedOut(() => showToast(T("starhermit.signedOut")));
   platform.initPlatform();
-  audio.setMuted(platform.isMuted());
+  setMuted(platform.isMuted());
   render.setBoard(boardView());
   platform.saveDoc();
 });
@@ -634,7 +631,6 @@ onUpdate((dt) => {
   overlay(L);
   boardTargets();
   settingsDialog(L);
-  toasts(L);
   playfield(L);
   // the progress bar's 0.2 s ease-out (style.css transition)
   const p = Game.computeProgress(round);

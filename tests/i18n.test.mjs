@@ -6,9 +6,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
-import { LOCALES, TABLE } from '../lang/strings.js';
 
 const ROOT = new URL('../', import.meta.url);
+const TABLE = JSON.parse(readFileSync(new URL('assets/strings.json', ROOT), 'utf8'));
+const LOCALES = ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT'];
 const KEY = /["'`]((?:app|mode|aria|panel|status|sync|diff|cell|btn|info|overlay|score|lb|settings|account|progress)\.[A-Za-z]+)["'`]/g;
 
 function usedKeys() {

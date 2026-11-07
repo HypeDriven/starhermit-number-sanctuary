@@ -29,13 +29,13 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | `native/render.ts` | The courtyard scene (tiles, board/plinth, lanterns, fireflies, ring, backdrop), tile states and the refused-digit flash, the graphics look per level (shadows, detail, shading, baked occlusion, reflections, bloom, grade, anti-aliasing), camera framing (`frameCamera`), picking, tile rectangles, the digits on the 2D overlay. |
 | `native/quality.ts` | The four looks (the browser build's gfx.js presets and budgets) keyed by the runtime's quality tier and level index. |
 | `native/platform.ts` | Save document (load, save, conflict merge, foreign migration of the browser build's cloud save), the Mute setting and legacy settings migration, player/sync line, invite link, platform clock, leaderboard posting through `score-script.js`. |
-| `native/audio.ts` | The authored one-shots per event with round-robin rotation, all loaded on start. |
-| `native/i18n.ts` | `T(key, vars)` over `lang/strings.js` in the runtime's interface language. |
+| `native/audio.ts` | The authored one-shots per event on sound banks in sequence, all loaded on start. |
+| `native/i18n.ts` | `T(key, vars)` over the engine's `strings` (`assets/strings.json`) in the runtime's interface language. |
 | `native/style.ts` | Registers `assets/ui-style.json`, the theme, focus ring and dialog look. |
 | `native/game.ts` | Typed facade over `src/round.js`. |
 | `src/round.js` | Pure round logic (no I/O): modes → difficulty, seeds, legality, actions, scoring, progress, the save document (`roundDoc`, `restoreRound`, `mergeSaveDocs`, `readForeign`). Shared with node tests and `tools/gen-plays.mjs`. |
 | `rules.js` | Pure Sudoku engine: `generateGrid`, `countSolutions`, `makePuzzle`, `solve`, `boxIndex`. |
-| `lang/strings.js` | The nine-locale string tables (keyed, en-US complete). |
+| `assets/strings.json` | The nine-locale string tables (keyed, en-US complete; account lines are the engine's `starhermit.*`). |
 | `assets/` | `courtyard-stone.webp`, `sanctuary-backdrop.webp`, baked `textures/grain.png` and `textures/contact-ao.png`, `ui-style.json`. |
 | `sfx/` | 19 authored Opus clips + manifests (manifests are left out of the package). |
 | `score-script.js` | Platform script (`server=`): range-checks a solved puzzle's score and posts it to `high-score`. |
@@ -309,7 +309,7 @@ contrast 0.11 (the old 0.22 S-curve), saturation 1.06, cool shadows / warm highl
 
 Object sounds, not game sounds: wood, stone, glass, brass, cloth, felt; no music or ambience bed. The
 clips play on the runtime's *effects* bus (Options › Audio owns volumes, mute and the voice limit);
-the game's Mute (M) silences its effects on top and is remembered (game setting `muted`, synced with
+the game's Mute (M, the engine's game mute) silences its effects on top and is remembered (game setting `muted`, synced with
 the account). Every clip loads on start; an event whose clip is still loading is silent. Place, invalid and select rotate
 through four clips each.
 
@@ -330,7 +330,7 @@ All clips: MOSS-SoundEffect v2.0, 48 kHz mono Opus, −20 LUFS (`sfx/manifest.tx
 
 ## 10. Localization
 
-Nine locales (`lang/strings.js`): `en-US` (complete), `en-GB`, `es-419`, `es-ES`, `de-DE`, `fr-FR`,
+Nine locales (`assets/strings.json`): `en-US` (complete), `en-GB`, `es-419`, `es-ES`, `de-DE`, `fr-FR`,
 `fr-CA`, `pt-BR`, `it-IT`; regional tables override only what differs (*Pencil* vs *Mark*, *Aide* vs
 *Indice*). The language is the runtime's interface language (Options › Language, else the account's
 or device's); every string is drawn through `T()` each frame, so a change shows on the next frame
@@ -390,7 +390,7 @@ its placeholders, and that no row is unused.
 
 ## 13. Technical architecture
 
-- **Pure logic** (`rules.js`, `src/round.js`, `lang/strings.js`) is plain ES modules imported by the
+- **Pure logic** (`rules.js`, `src/round.js`) is plain ES modules imported by the
   engine client (`allowJs`) and the node tests unchanged.
 - **Frame order** (`onUpdate`): apply the look for the current graphics level, pump audio loads, build
   the UI (top bar, status, controls, overlay, board targets, dialog, toasts), compute the playfield,
