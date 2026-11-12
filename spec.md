@@ -469,3 +469,15 @@ runtime's error screen or an unfinished round fails it.
 2. **Mode-specific rules** — Learn lessons, a Journey ladder, Challenge constraints.
 3. **Reduced-motion gameplay feedback** — a persistent border instead of the 220 ms flash.
 4. **Hero lantern model** beside the board.
+
+
+
+Fixed-width controls wrap long translated labels while preserving their readable type size and keyboard shortcuts.
+
+<!-- regional-localization:start -->
+
+### Regional interface languages
+
+The string tables include complete regional variants for `en-SG`, `en-HK`, `en-BQ`, `fr-BE`, `de-BE`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `ja-JP`, `nl-BE`, `zh-SG`, `ms-SG`, `ta-SG`, `zh-HK`, `yue-HK`, `nl-NL`, `fi-FI`, `sv-FI`, `et-EE`, `id-ID`, `vi-VN`, `da-DE`, `lb-BE`, `co-FR`, `eu-FR`, `ca-FR`, `oc-FR`, `sl-IT`, `fur-IT`, `ca-IT`, `oc-IT`, `ca-ES`, `eu-ES`, `gl-ES`, `su-ID`, `bew-ID`, `km-VN`, `ru-FI`, `ru-EE`.
+
+<!-- regional-localization:end -->

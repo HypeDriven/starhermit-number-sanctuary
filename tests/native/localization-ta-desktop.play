@@ -1,0 +1,26 @@
+# viewport 1280x800
+until 300 Mistakes 0
+frames 30
+key ArrowUp 1
+key KeyH 1
+frames 10
+save number-english-desktop
+key F2 2
+frames 20
+click தமிழ் (ta-SG)
+frames 50
+click மூடு
+frames 20
+expect எண் சரணாலயம்
+expect குறிப்பு (H)
+save number-tamil-desktop
+key ArrowRight 1
+key KeyH 1
+frames 10
+key KeyP 1
+frames 10
+expect இடைவெளி
+save number-tamil-paused-desktop
+click தொடர்வு
+frames 10
+expect குறிப்பு (H)

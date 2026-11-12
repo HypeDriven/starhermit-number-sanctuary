@@ -1,3 +1,5 @@
+// localization-runtime:attached
+import { setLocalizedDefaultFont as __l10nSetFont, setLocalizedStyles as __l10nStyles } from "./l10n/font.ts";
 // The look of the top bar, panels, overlays and dialogs: the browser build's
 // style.css, rewritten class-based in tools/ui-style.css and converted once
 // with `starhermit css` into assets/ui-style.json (`npm run css`), registered
@@ -9,7 +11,7 @@ import * as ui from "starhermit:ui";
 
 export function initStyles(): void {
   const css = files.readJson("assets/ui-style.json") as unknown as ui.CssStyles;
-  ui.setFont({ family: "sans-serif" });
+  __l10nSetFont({ family: "sans-serif" });
   ui.setTheme({
     fontSize: 14, smallSize: 12, headingSize: 20, padding: 8, spacing: 8, radius: 6,
     text: "#e8edf2", muted: "#9aa7b4", panel: "#232b33", control: "#2d3742", hovered: "#3a4550",
@@ -17,7 +19,7 @@ export function initStyles(): void {
   });
   ui.setTokens(css.tokens);
   ui.setAnimations(css.animations);
-  ui.setStyles({
+  __l10nStyles({
     ...css.styles,
     label: { text: { color: "$text" } },
     paragraph: { text: { color: "$text" } },

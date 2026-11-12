@@ -9,7 +9,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 
 const ROOT = new URL('../', import.meta.url);
 const TABLE = JSON.parse(readFileSync(new URL('assets/strings.json', ROOT), 'utf8'));
-const LOCALES = ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT'];
+const LOCALES = ['en-US', 'en-GB', 'es-419', 'es-ES', 'de-DE', 'fr-FR', 'fr-CA', 'pt-BR', 'it-IT', 'en-SG', 'en-HK', 'en-BQ', 'fr-BE', 'de-BE', 'es-CO', 'de-IT', 'fr-IT', 'es-CL', 'es-AR', 'es-EC', 'ja-JP', 'nl-BE', 'zh-SG', 'ms-SG', 'ta-SG', 'zh-HK', 'yue-HK', 'nl-NL', 'fi-FI', 'sv-FI', 'et-EE', 'id-ID', 'vi-VN', 'de-BR', 'da-DE', 'lb-BE', 'co-FR', 'eu-FR', 'ca-FR', 'oc-FR', 'sl-IT', 'fur-IT', 'ca-IT', 'oc-IT', 'ca-ES', 'eu-ES', 'gl-ES', 'su-ID', 'bew-ID', 'km-VN', 'ru-FI', 'ru-EE'];
 const KEY = /["'`]((?:app|mode|aria|panel|status|sync|diff|cell|btn|info|overlay|score|lb|settings|account|progress)\.[A-Za-z]+)["'`]/g;
 
 function usedKeys() {

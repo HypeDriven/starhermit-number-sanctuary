@@ -1,3 +1,5 @@
+// localization-runtime:attached
+import { localizedCanvasFont as __l10nCanvasFont } from "./l10n/font.ts";
 // The lamp-lit stone courtyard on starhermit:scene, as the browser build's
 // main.js drew it with three.js r160: the 81 inset number tiles (plain boxes
 // or rounded glazed tiles, coloured by state: open blue, clue orange, the
@@ -263,7 +265,7 @@ function paintDigits(size: number): void {
   digitSize = size;
   const cv = new OffscreenCanvas(size * 9, size);
   const ctx = cv.getContext("2d");
-  ctx.font = "bold 96px sans-serif";
+  ctx.font = __l10nCanvasFont("bold 96px sans-serif");
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.shadowColor = "rgba(0,0,0,0.55)";

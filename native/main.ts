@@ -1,3 +1,7 @@
+import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
+import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
+// localization-runtime:attached
+import { openLocalizedOptions as __l10nOptions } from "./l10n/menu.ts";
 // Number Sanctuary on the StarHermit engine: the entry module (starhermit.txt
 // engine.entry), played natively by the StarHermit client and in browsers by
 // the engine's web runtime. The rules (rules.js) and the round
@@ -15,9 +19,7 @@
 // Time is the runtime's fixed steps: the round clock advances by them while a
 // round runs unpaused, so a hidden window or slow frames never cost time.
 import "./i18n.ts";
-import {
-  clipboard, frame, levelSettings, onFixedUpdate, onOverlay, onQuit, onStart, onSuspend, onUpdate, openMenu,
-} from "starhermit:engine";
+import { clipboard, frame, levelSettings, onFixedUpdate, onOverlay, onQuit, onStart, onSuspend, onUpdate } from "starhermit:engine";
 import { bindingLabel, onAction, onPointerButton, onTouch, type ActionEvent } from "starhermit:input";
 import * as draw from "starhermit:draw";
 import * as ui from "starhermit:ui";
@@ -207,8 +209,8 @@ function tw(text: string, style: string | (string | ui.Style)[], kind?: "button"
 /** Text up to `width` wide: one label when it fits, else a wrapped paragraph. */
 function para(text: string, width: number, cls: string, size?: number): void {
   const st: (string | ui.Style)[] = size ? [cls, { text: { size } }] : [cls];
-  if (tw(text, st) <= width) ui.style(...st).label(text);
-  else ui.style(...st).paragraph(text, width);
+  if (tw(text, st) <= width) ui.style(...__l10nStyle(st)).label(text);
+  else ui.style(...__l10nStyle(st)).paragraph(text, width);
 }
 /** Actions run after the frame's UI is built (a state change mid-build would confuse later widgets). */
 const pending: (() => void)[] = [];
@@ -222,7 +224,13 @@ function button(label: string, cls: string, act: () => void, o: BtnOpts = {}): v
   if (o.padX != null) st.padding = { top: 4, bottom: 4, start: o.padX, end: o.padX };
   const opts: ui.ButtonOptions = {};
   if (o.selected != null) opts.selected = o.selected;
-  const u = o.id ? ui.style(cls, st).id(o.id) : ui.style(cls, st);
+  // Fixed-width controls retain their readable type size when a translation needs another line.
+  if (o.width != null && tw(label, [cls, st], "button") > o.width) {
+    const inner = Math.max(20, o.width - 16);
+    opts.content = () => ui.style(__l10nStyle({ text: { align: "center", ...(o.size != null ? { size: o.size } : {}) } })).paragraph(label, inner);
+    st.padding = { top: 6, bottom: 6, start: 8, end: 8 };
+  }
+  const u = o.id ? ui.style(__l10nStyle(cls), __l10nStyle(st)).id(o.id) : ui.style(__l10nStyle(cls), __l10nStyle(st));
   if (u.button(label, opts)) later(act);
 }
 /** "Mark (N)": the authored key in a button label replaced by the action's effective binding (reflectKeys). */
@@ -258,7 +266,7 @@ function topBar(L: Layout): void {
   };
   const r = ui.place("topbar", "top", () => {
     const titleRow = (): void => {
-      ui.style("title", { text: { size: titleSize } }).label(T("app.title"));
+      ui.style(__l10nStyle("title"), __l10nStyle({ text: { size: titleSize } })).label(T("app.title"));
       button(T("settings.button"), "settings-btn", openSettings, { size: settingsSize, height: L.phone ? 34 : undefined, id: "settings" });
     };
     const modeBtn = (m: Mode, width?: number): void => {
@@ -346,12 +354,12 @@ function statusPanel(L: Layout): void {
   const padX = L.short ? 10 : 16, padY = L.short ? 8 : 14;
   const inner = w - 2 * padX;
   const r = ui.id("status").place(T("aria.statusPanel"), { anchor: "top-start", x: L.short ? 8 : 18, y: topH / L.sc + (L.short ? 8 : 18) }, () => {
-    ui.style("panel-h", L.short ? { text: { size: 13 } } : {}).heading(T("panel.status"));
+    ui.style(__l10nStyle("panel-h"), __l10nStyle(L.short ? { text: { size: 13 } } : {})).heading(T("panel.status"));
     para(statusLine(), inner, "status-text", L.short ? 12 : undefined);
     if (!L.short) para(round.selected === -1 ? T("cell.none") : cellName(round.selected), inner, "readout");
     playerLine(inner, 12);
     ui.column("progress-wrap", () => {
-      ui.style("progress-label").label(T("panel.progress"));
+      ui.style(__l10nStyle("progress-label")).label(T("panel.progress"));
       progressBar(inner);
     }, { spacing: 6, padding: { top: 6 } });
   }, { style: "panel", width: w, padding: { top: padY, bottom: padY, start: padX, end: padX }, spacing: L.short ? 4 : 6 });
@@ -366,7 +374,7 @@ function padButton(d: number, width: number, height: number, size: number): void
 function eraseButton(width: number, height: number): void {
   // named "Erase selected cell" for screen readers (the old aria-label), showing "Erase"
   const text = T("btn.erase");
-  if (ui.style("pad-wide", { width, minHeight: height }).id("pad-erase").button(T("aria.erase"), { content: () => ui.style("pad-wide-text").label(text) })) later(eraseCell);
+  if (ui.style(__l10nStyle("pad-wide"), __l10nStyle({ width, minHeight: height })).id("pad-erase").button(T("aria.erase"), { content: () => ui.style(__l10nStyle("pad-wide-text")).label(text) })) later(eraseCell);
 }
 function actionButtons(width: number, perRow: number, height: number, size: number, gap: number): void {
   const list: [string, () => void, boolean?][] = [
@@ -423,7 +431,7 @@ function controlsPanel(L: Layout): void {
   const top = topH / L.sc + (L.short ? 8 : 18);
   const body = (bodyW: number): void => {
     const r = ui.column("controls-body", () => {
-      ui.style("panel-h", L.short ? { text: { size: 13 } } : {}).heading(T("panel.controls"));
+      ui.style(__l10nStyle("panel-h"), __l10nStyle(L.short ? { text: { size: 13 } } : {})).heading(T("panel.controls"));
       const bw = (bodyW - 2 * gap) / 3;
       const bh = L.short ? 36 : 40, fs = L.short ? 15 : 18;
       ui.column(T("aria.numberPad"), () => {
@@ -464,7 +472,7 @@ function overlay(L: Layout): void {
   const r = ui.place("overlay", "center", () => {
     if (round.gameOver) {
       const p = Game.scoreParts(round);
-      ui.style("overlay-h").heading(T("overlay.complete"));
+      ui.style(__l10nStyle("overlay-h")).heading(T("overlay.complete"));
       const rows: [string, number, boolean][] = [
         [T("score.placed"), p.placed, false],
         [T("score.mistakes", { n: round.mistakes }), p.mistakePenalty, false],
@@ -477,15 +485,15 @@ function overlay(L: Layout): void {
         for (const [k, v, total] of rows) {
           if (total) ui.widget("rule", { role: "none", size: { width: inner, height: 7 }, draw: (rr) => draw.box(rr.x, rr.y + rr.height - 1, rr.width, 1, "rule") });
           ui.row(k, () => {
-            ui.style(total ? "score-total" : "score-k").label(k);
-            ui.style(total ? "score-total" : "score-k").label(String(v));
+            ui.style(__l10nStyle(total ? "score-total" : "score-k")).label(k);
+            ui.style(__l10nStyle(total ? "score-total" : "score-k")).label(String(v));
           }, { width: inner, justify: "space-between", spacing: 24 });
         }
       }, { spacing: 6, padding: { top: 6 } });
       if (lbLine) para(T(lbLine[0], lbLine[1]), inner, "hint-line");
       para(T("overlay.again"), inner, "hint-line");
     } else {
-      ui.style("overlay-h").heading(T("overlay.paused"));
+      ui.style(__l10nStyle("overlay-h")).heading(T("overlay.paused"));
       para(T("overlay.pausedHint"), inner, "hint-line");
       ui.row("overlay-actions", () => {
         button(T("btn.resume"), "overlay-btn", () => setPaused(false), { id: "resume" });
@@ -505,11 +513,11 @@ function settingsDialog(L: Layout): void {
   const still = ui.dialog("settings-dialog", "", true, () => {
     ui.column("settings-body", () => {
       ui.row("settings-head", () => {
-        ui.style("dialog-h").heading(T("settings.title"));
+        ui.style(__l10nStyle("dialog-h")).heading(T("settings.title"));
         button(T("settings.close"), "action-btn", () => { settingsOpen = false; }, { id: "settings-close", width: Math.max(80, tw(T("settings.close"), "action-btn", "button") + 28) });
       }, { width: inner, justify: "space-between", align: "center" });
       ui.column("account", () => {
-        ui.style("section-h").heading(T("account.title"));
+        ui.style(__l10nStyle("section-h")).heading(T("account.title"));
         if (!platform.signedIn()) {
           para(T("account.signInHint"), inner, "account-hint");
           button(T("starhermit.signIn"), "account-btn", () => { settingsOpen = false; void requestSignIn().catch(() => undefined); }, { id: "sign-in" });
@@ -518,7 +526,7 @@ function settingsDialog(L: Layout): void {
         }
       }, { spacing: 6, padding: { top: 6 } });
       ui.widget("settings-rule", { role: "none", size: { width: inner, height: 1 }, draw: (rr) => draw.box(rr.x, rr.y, rr.width, 1, "rule") });
-      button(T("settings.options"), "account-btn", () => { settingsOpen = false; openMenu(); }, { id: "options", width: inner });
+      button(T("settings.options"), "account-btn", () => { settingsOpen = false; __l10nOptions(); }, { id: "options", width: inner });
     }, { width: inner, spacing: 10 });
   });
   // The Escape that opened it (from the pause key path) must not close it at once.
@@ -620,7 +628,7 @@ onSuspend(() => { if (playing()) { paused = true; } platform.saveDoc(); platform
 onOverlay((open) => { if (open && playing()) setPaused(true); });
 onQuit(() => platform.saveDoc());
 
-onUpdate((dt) => {
+onUpdate(__l10nRender((dt) => {
   const f = frame();
   applyLook();
   const L = layoutNow();
@@ -651,4 +659,8 @@ onUpdate((dt) => {
   }
   render.update(dt);
   render.drawDigits();
-});
+}));
+
+// localization-runtime:menu
+import { installLanguageMenu as __installLanguageMenu } from "./l10n/menu.ts";
+__installLanguageMenu(false);
