@@ -16,7 +16,7 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | Players | 1; personal bests per difficulty, and a high-score leaderboard for signed-in players |
 | Session length | 4–20 min per grid (Easy ≈ 4–8 min, Hard ≈ 12–25 min); resumable, so a session can be one cell long |
 | Platforms | StarHermit engine script game: natively in the StarHermit client, in browsers through the engine's web runtime; desktop and phones, portrait and landscape |
-| Engine | StarHermit engine 1.39.0, host API 1.39 (`starhermit.txt`: `engine.version=1.39.0`, `engine.minor=39`, capabilities `platform, storage, clipboard`) |
+| Engine | StarHermit engine 1.44.1, host API 1.44 (`starhermit.txt`: `engine.version=1.44.1`, `engine.minor=44`, capabilities `platform, storage, clipboard`) |
 | Rendering | `starhermit:scene` (three.js r185-parity scene graph) for the courtyard; `starhermit:ui` for the top bar, panels, overlays and dialog; `starhermit:draw` for the board digits |
 | Persistence | The engine's `saves` store (device + the player's cloud slot); the Mute choice in the engine's game `settings` |
 
@@ -359,8 +359,8 @@ its placeholders, and that no row is unused.
 ## 12. StarHermit integration
 
 - **Manifest:** `name`, `description`, `owner`, `server=score-script.js`, `cover=cover.jpg`,
-  `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.39.0`,
-  `engine.minor=39`, `engine.capabilities=platform,storage,clipboard`, the actions and pad defaults.
+  `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.44.1`,
+  `engine.minor=44`, `engine.capabilities=platform,storage,clipboard`, the actions and pad defaults.
 - **Player:** `player()`; signed in from the first frame in the client, or after the runtime's sign-in
   (Settings › Sign in). The status panel shows the display name and the save state (*Saving to cloud…*
   / *Cloud save synced* / *Cloud sync failed*). Signing out shows a toast; play continues locally.
@@ -481,3 +481,7 @@ Fixed-width controls wrap long translated labels while preserving their readable
 The string tables include complete regional variants for `en-SG`, `en-HK`, `en-BQ`, `fr-BE`, `de-BE`, `es-CO`, `de-IT`, `fr-IT`, `es-CL`, `es-AR`, `es-EC`, `de-BR`. These reuse the corresponding existing translations in their language family. The runtime can resolve the exact regional tag. Language selection is available from the game’s Options panel or F2 and is saved per player in `ui.language`. Changes apply during play. Additional national, regional and indigenous language packs are only shipped once every English message has a translation with intact placeholders and markup. Complete additional language tables: `ja-JP`, `nl-BE`, `zh-SG`, `ms-SG`, `ta-SG`, `zh-HK`, `yue-HK`, `nl-NL`, `fi-FI`, `sv-FI`, `et-EE`, `id-ID`, `vi-VN`, `da-DE`, `lb-BE`, `co-FR`, `eu-FR`, `ca-FR`, `oc-FR`, `sl-IT`, `fur-IT`, `ca-IT`, `oc-IT`, `ca-ES`, `eu-ES`, `gl-ES`, `su-ID`, `bew-ID`, `km-VN`, `ru-FI`, `ru-EE`.
 
 <!-- regional-localization:end -->
+
+## Engine 1.44.1
+
+Browser play uses the WebGPU-only StarHermit 1.44.1 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
