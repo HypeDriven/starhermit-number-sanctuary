@@ -1,3 +1,4 @@
+import { showCursor } from "./cursor.ts";
 import { localizedStyle as __l10nStyle } from "./l10n/font.ts";
 import { withLanguageRender as __l10nRender } from "./l10n/menu.ts";
 // localization-runtime:attached
@@ -602,6 +603,7 @@ function adopt(doc: Doc): boolean {
 }
 
 onStart(() => {
+  showCursor();
   audio.loadSfx();
   initStyles();
   const doc = platform.loadDoc();
