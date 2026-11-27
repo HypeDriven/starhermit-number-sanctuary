@@ -16,7 +16,7 @@ digit you set is a tile pressed into the floor and the wrong digit is refused be
 | Players | 1; personal bests per difficulty, and a high-score leaderboard for signed-in players |
 | Session length | 4–20 min per grid (Easy ≈ 4–8 min, Hard ≈ 12–25 min); resumable, so a session can be one cell long |
 | Platforms | StarHermit engine script game: natively in the StarHermit client, in browsers through the engine's web runtime; desktop and phones, portrait and landscape |
-| Engine | StarHermit engine 1.51.0, host API 1.51 (`starhermit.txt`: `engine.version=1.51.0`, `engine.minor=51`, capabilities `platform, storage, clipboard`) |
+| Engine | StarHermit engine 1.53.0, host API 1.53 (`starhermit.txt`: `engine.version=1.53.0`, `engine.minor=53`, capabilities `platform, storage, clipboard`) |
 | Rendering | `starhermit:scene` (three.js r185-parity scene graph) for the courtyard; `starhermit:ui` for the top bar, panels, overlays and dialog; `starhermit:draw` for the board digits |
 | Persistence | The engine's `saves` store (device + the player's cloud slot); the Mute choice in the engine's game `settings` |
 
@@ -359,8 +359,8 @@ its placeholders, and that no row is unused.
 ## 12. StarHermit integration
 
 - **Manifest:** `name`, `description`, `owner`, `server=score-script.js`, `cover=cover.jpg`,
-  `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.51.0`,
-  `engine.minor=51`, `engine.capabilities=platform,storage,clipboard`, the actions and pad defaults.
+  `launch=index.html`, `engine.api=1`, `engine.entry=native/main.ts`, `engine.version=1.53.0`,
+  `engine.minor=53`, `engine.capabilities=platform,storage,clipboard`, the actions and pad defaults.
 - **Player:** `player()`; signed in from the first frame in the client, or after the runtime's sign-in
   (Settings › Sign in). The status panel shows the display name and the save state (*Saving to cloud…*
   / *Cloud save synced* / *Cloud sync failed*). Signing out shows a toast; play continues locally.
@@ -482,10 +482,12 @@ The string tables include complete regional variants for `en-SG`, `en-HK`, `en-B
 
 <!-- regional-localization:end -->
 
-## Engine 1.51.0
+## Engine 1.53.0
 
-Browser play uses the WebGPU-only StarHermit 1.51.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
+Browser play uses the WebGPU-only StarHermit 1.53.0 web runtime. Automatic ray-traced shadows are enabled on supported Vulkan devices, with mapped-shadow fallbacks elsewhere. Packaging creates block-compressed runtime textures and compressed glTF copies, retaining original image fallbacks.
 
 Browser rendering uses the engine's asynchronous pipeline creation so newly encountered materials do not stall the page. Native play retains the engine's synchronous pipeline behavior.
 
 Higher graphics tiers use native per-object motion blur for moving pieces and effects. Camera motion stays sharp, lower tiers omit the effect, and the runtime's Motion blur and Reduce motion preferences remain authoritative.
+
+On engine 1.53.0, browser play through WebGL 2 compiles a frame's shader programs together and holds that frame until they are linked, blends skinned meshes in one pass, reuses the window pass's depth, and uses a hardware WebGL 2 context when WebGPU's adapter is software.
