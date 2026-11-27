@@ -12,7 +12,7 @@
     "metadataSource": "starhermit.txt",
     "createdAt": "2026-09-01T07:01:05.011997+00:00",
     "coverArtSource": "manifest",
-    "coverArtUpdatedAt": "2026-11-26T21:37:52.973055+00:00",
+    "coverArtUpdatedAt": "2026-11-27T17:07:09.811333+00:00",
     "submittedByUserId": "2712e04e-461b-4d23-81ae-e40b429128a8",
     "submittedByUsername": "starhermit",
     "hosting": {
@@ -22,9 +22,9 @@
       "pinnedCommitSha": null,
       "deployedCommitSha": null,
       "deployError": null,
-      "deployedAt": "2026-11-26T21:37:52.950313+00:00",
+      "deployedAt": "2026-11-27T17:07:09.800834+00:00",
       "externalLaunchUrl": null,
-      "engineVersion": "1.51.0",
+      "engineVersion": "1.53.0",
       "deployWarning": null
     },
     "description": "Solve Sudoku puzzles by filling a nine-by-nine grid so each row, column, and box contains every digit once.",
@@ -36,19 +36,19 @@
     "links": [],
     "isDisabled": false
   },
-  "publishedAt": "2026-11-26T21:37:53.372Z",
-  "sourceCommit": "8fc3b6da2a6883aec6f757999bde08a805f265ae",
-  "bytesReceived": 2485080,
-  "archiveSha256": "8a3e44a429ab9dc69797bf0def48131a971f890ab751d7c8d8a7e691d73657dc",
+  "publishedAt": "2026-11-27T17:07:09.975Z",
+  "sourceCommit": "fca307099879ba361fcd71012c96c7c0db81ea54",
+  "bytesReceived": 2485077,
+  "archiveSha256": "1b29ed0d3f05dc22f51cb1afa19ea0276e248e57dd4cb4dbe6a01cba7e5a4f56",
   "indexSha256": "3435f7fc8623c647a760ec42c232e442db8485739992f9439d4ef1470558bf59",
   "result": {
     "clientPublished": true,
     "serverImageLoaded": false,
     "imageDigest": null,
-    "bytesReceived": 2485080,
+    "bytesReceived": 2485077,
     "mode": "replace",
     "filesRemoved": 0,
-    "engineVersion": "1.51.0",
+    "engineVersion": "1.53.0",
     "deployWarning": null
   },
   "liveVerification": {
