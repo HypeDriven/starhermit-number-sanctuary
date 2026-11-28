@@ -420,13 +420,16 @@ function frameCamera(w: number, h: number): void {
 
 const ndc = new Vector2();
 const raycaster = new Raycaster();
+const tileMeshes: Mesh[] = [];
 /** The cell under a window point (pickCell), or -1. */
 export function pick(x: number, y: number): number {
   const f = frame();
   if (f.width <= 0 || f.height <= 0) return -1;
   ndc.set((x / f.width) * 2 - 1, -(y / f.height) * 2 + 1);
   raycaster.setFromCamera(ndc, camera);
-  const hits = raycaster.intersectObjects(tiles.map((t) => t.mesh), false);
+  tileMeshes.length = tiles.length;
+  for (let i = 0; i < tiles.length; i++) tileMeshes[i] = tiles[i]!.mesh;
+  const hits = raycaster.intersectObjects(tileMeshes, false);
   const o = hits[0]?.object;
   return o ? (o.userData.cell as number) : -1;
 }
